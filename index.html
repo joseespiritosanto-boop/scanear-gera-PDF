@@ -19,7 +19,8 @@
     input:focus, select:focus { outline: none; border-color: #EE4D2D; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
-    canvas { width: 100%; border: 1px solid #E5E7EB; border-radius: 8px; background: #fafafa; margin-top: 8px; }
+    video, canvas { width: 100%; border: 1px solid #E5E7EB; border-radius: 8px; background: #111827; margin-top: 8px; max-height: 360px; object-fit: contain; }
+    canvas { background: #fff; display: none; }
     .btn { width: 100%; padding: 11px; border: none; border-radius: 7px; font-weight: 700; font-size: 13px; cursor: pointer; margin-top: 6px; }
     .btn-spx { background: #EE4D2D; color: #fff; }
     .btn-dark { background: #181C24; color: #fff; }
@@ -38,23 +39,26 @@
   <div class="container">
     <div class="header">
       <h1>📷 SPX | Scanner de Nota Fiscal</h1>
-      <p>Escaneia a nota, lê os dados/itens e envia para o Google Apps Script</p>
+      <p>Escaneia a nota pela câmera, lê as informações e envia para o Apps Script tratar</p>
     </div>
 
     <div class="card">
-      <h2>1. Escanear Nota Física</h2>
-      <label>Usar câmera ou escolher foto da nota</label>
-      <input type="file" id="fotoInput" accept="image/*" capture="environment" />
+      <h2>1. Escanear Nota Física (Câmera)</h2>
+      <div class="row">
+        <button class="btn btn-dark" type="button" id="btnCamera" onclick="iniciarCamera()">🎥 Ligar Câmera</button>
+        <button class="btn btn-spx" type="button" id="btnEscanear" onclick="escanearQuadro()" disabled>📸 Escanear Nota</button>
+      </div>
 
-      <label>Filtro de escaneamento</label>
+      <label style="margin-top:10px">Filtro de escaneamento</label>
       <select id="modoFiltro" onchange="aplicarFiltroScanner()">
         <option value="doc_nitido">Documento Nítido (Alto Contraste / PB)</option>
         <option value="cinza_limpo">Tons de Cinza Limpo</option>
         <option value="original">Original</option>
       </select>
 
+      <video id="videoPreview" autoplay playsinline muted></video>
       <canvas id="scanCanvas"></canvas>
-      <button class="btn btn-dark" id="btnOcr" onclick="executarOcr()">🔍 Ler Informações e Itens (OCR)</button>
+      <button class="btn btn-dark" type="button" id="btnOcr" onclick="executarOcr()" disabled>🔍 Ler Informações e Itens (OCR)</button>
     </div>
 
     <div class="card">
@@ -99,7 +103,7 @@
         </div>
       </div>
 
-      <label>Adicionar item</label>
+      <label>Adicionar / ajustar item</label>
       <div class="row">
         <input type="text" id="itemCod" placeholder="Código (opcional)" />
         <input type="text" id="itemNome" placeholder="Produto / Descrição" />
@@ -108,7 +112,7 @@
         <input type="number" id="itemQtd" placeholder="Qtd" value="1" step="0.01" />
         <input type="number" id="itemValor" placeholder="Vl. Unit. (R$)" value="0" step="0.01" />
       </div>
-      <button class="btn btn-gray" onclick="adicionarItemManual()">+ Adicionar Item</button>
+      <button class="btn btn-gray" type="button" onclick="adicionarItemManual()">+ Adicionar Item</button>
 
       <table>
         <thead>
@@ -117,7 +121,7 @@
         <tbody id="listaItensBody"></tbody>
       </table>
 
-      <button class="btn btn-spx" id="btnEnviar" onclick="enviarParaAppsScript()">🚀 Enviar Dados para o Apps Script</button>
+      <button class="btn btn-spx" type="button" id="btnEnviar" onclick="enviarDadosParaAppsScript()">🚀 Enviar Dados para o Apps Script</button>
       <div id="statusBox" class="status"></div>
     </div>
   </div>
@@ -126,36 +130,77 @@
     // Cole aqui a URL /exec do seu Web App do Google Apps Script
     const APPS_SCRIPT_EXEC_URL = "COLE_AQUI_SUA_URL_EXEC";
 
-    let imagemOriginal = null;
+    let streamAtivo = null;
+    let quadroCapturado = null;
     let itensNota = [];
 
-    document.getElementById("fotoInput").addEventListener("change", function(e) {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(ev) {
-        const img = new Image();
-        img.onload = function() {
-          imagemOriginal = img;
-          aplicarFiltroScanner();
-        };
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
+    window.addEventListener("load", function() {
+      iniciarCamera();
     });
 
+    async function iniciarCamera() {
+      try {
+        if (streamAtivo) {
+          streamAtivo.getTracks().forEach(t => t.stop());
+        }
+        const video = document.getElementById("videoPreview");
+        video.style.display = "block";
+        document.getElementById("scanCanvas").style.display = "none";
+
+        streamAtivo = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false
+        });
+        video.srcObject = streamAtivo;
+        document.getElementById("btnEscanear").disabled = false;
+        setStatus("info", "Câmera ligada. Posicione a nota fiscal e toque em 'Escanear Nota'.");
+      } catch (err) {
+        setStatus(
+          "err",
+          "Não foi possível abrir a câmera diretamente (" + err.message + ").\n" +
+          "Verifique se o navegador tem permissão de câmera para este site."
+        );
+      }
+    }
+
+    function escanearQuadro() {
+      const video = document.getElementById("videoPreview");
+      const canvas = document.getElementById("scanCanvas");
+      if (!video.videoWidth || !video.videoHeight) {
+        return setStatus("err", "Aguarde a imagem da câmera aparecer antes de escanear.");
+      }
+
+      const maxW = 900;
+      const escala = video.videoWidth > maxW ? maxW / video.videoWidth : 1;
+      canvas.width = Math.round(video.videoWidth * escala);
+      canvas.height = Math.round(video.videoHeight * escala);
+
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      tempCanvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const img = new Image();
+      img.onload = function() {
+        quadroCapturado = img;
+        video.style.display = "none";
+        canvas.style.display = "block";
+        document.getElementById("btnOcr").disabled = false;
+        aplicarFiltroScanner();
+        setStatus("ok", "Nota escaneada! Agora clique em 'Ler Informações e Itens (OCR)' ou preencha os campos.");
+      };
+      img.src = tempCanvas.toDataURL("image/jpeg", 0.85);
+    }
+
     function aplicarFiltroScanner() {
-      if (!imagemOriginal) return;
+      if (!quadroCapturado) return;
       const canvas = document.getElementById("scanCanvas");
       const ctx = canvas.getContext("2d");
       const modo = document.getElementById("modoFiltro").value;
-      const maxW = 900;
-      const escala = imagemOriginal.width > maxW ? maxW / imagemOriginal.width : 1;
-      canvas.width = Math.round(imagemOriginal.width * escala);
-      canvas.height = Math.round(imagemOriginal.height * escala);
-      ctx.drawImage(imagemOriginal, 0, 0, canvas.width, canvas.height);
 
+      ctx.drawImage(quadroCapturado, 0, 0, canvas.width, canvas.height);
       if (modo === "original") return;
+
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imgData.data;
       for (let i = 0; i < data.length; i += 4) {
@@ -171,11 +216,11 @@
     }
 
     async function executarOcr() {
-      if (!imagemOriginal) return setStatus("err", "Selecione ou capture a imagem da nota primeiro.");
+      if (!quadroCapturado) return setStatus("err", "Escaneie a nota primeiro.");
       const btn = document.getElementById("btnOcr");
       btn.disabled = true;
-      btn.textContent = "⏳ Lendo nota...";
-      setStatus("info", "Lendo informações da nota escaneada...");
+      btn.textContent = "⏳ Lendo informações...";
+      setStatus("info", "Extraindo texto e itens da nota escaneada...");
 
       try {
         const canvas = document.getElementById("scanCanvas");
@@ -214,7 +259,7 @@
           }
         }
         renderizarItens();
-        setStatus("ok", "Leitura concluída (" + adicionados + " item(ns) sugerido(s)). Confira e clique em Enviar.");
+        setStatus("ok", "Informações lidas (" + adicionados + " item(ns) sugerido(s)). Confira e clique em 'Enviar Dados para o Apps Script'.");
       } catch (e) {
         setStatus("err", "Erro ao ler nota: " + e.message);
       } finally {
@@ -256,22 +301,22 @@
       document.getElementById("listaItensBody").innerHTML = itensNota.map((it, idx) =>
         "<tr><td>" + esc(it.codigo) + "</td><td>" + esc(it.produto) + "</td><td>" + it.quantidade +
         "</td><td>R$ " + Number(it.valorUnitario).toFixed(2) + "</td><td>R$ " + Number(it.valorTotal).toFixed(2) +
-        "</td><td><button onclick='removerItem(" + idx + ")'>X</button></td></tr>"
+        "</td><td><button type='button' onclick='removerItem(" + idx + ")'>X</button></td></tr>"
       ).join("");
     }
 
-    async function enviarParaAppsScript() {
+    async function enviarDadosParaAppsScript() {
       if (!APPS_SCRIPT_EXEC_URL || !APPS_SCRIPT_EXEC_URL.includes("/exec")) {
         return setStatus("err", "Configure a URL /exec na constante APPS_SCRIPT_EXEC_URL do index.html.");
       }
-      if (!imagemOriginal) {
-        return setStatus("err", "Escaneie ou selecione uma imagem da nota antes de enviar.");
+      if (!quadroCapturado) {
+        return setStatus("err", "Escaneie a nota pela câmera antes de enviar.");
       }
 
       const btn = document.getElementById("btnEnviar");
       btn.disabled = true;
-      btn.textContent = "⏳ Enviando para o Apps Script...";
-      setStatus("info", "Enviando dados e imagem escaneada para o Google Apps Script...");
+      btn.textContent = "⏳ Enviando dados...";
+      setStatus("info", "Enviando informações lidas para o Google Apps Script tratar...");
 
       try {
         const canvas = document.getElementById("scanCanvas");
@@ -309,10 +354,10 @@
         if (jsonResp && jsonResp.sucesso) {
           setStatus(
             "ok",
-            "Enviado com sucesso! O Apps Script registrou na linha " + jsonResp.linha +
+            "Dados enviados e tratados pelo Apps Script! Linha: " + jsonResp.linha +
             "\nItens salvos: " + jsonResp.totalItens +
             "\nE-mail enviado: " + (jsonResp.emailEnviado ? "Sim" : "Não") +
-            "\nPDF no Drive: " + (jsonResp.pdfUrl || "Gerado")
+            "\nArquivo salvo no Drive: " + (jsonResp.pdfUrl || "OK")
           );
         } else {
           setStatus("err", "Falha no Apps Script:\n" + (jsonResp ? jsonResp.mensagem : textoResp.slice(0, 300)));
