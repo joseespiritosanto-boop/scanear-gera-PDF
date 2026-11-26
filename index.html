@@ -147,6 +147,10 @@
       font-size: 12px;
       font-weight: 700;
       z-index: 5;
+      transition: background 0.2s ease;
+    }
+    .hud-feedback.ok-flash {
+      background: rgba(21, 128, 61, 0.95);
     }
 
     .progress-panel {
@@ -252,6 +256,10 @@
       margin-bottom: 10px;
     }
     input:focus, select:focus, textarea:focus { outline: none; border-color: var(--spx-orange); }
+    input.campo-atencao {
+      border-color: #F59E0B;
+      background: #FFFBEB;
+    }
 
     .conf-meter {
       display: flex;
@@ -322,6 +330,26 @@
     .alert-warn { background: var(--warn-bg); color: var(--warn-text); border: 1px solid #FCD34D; }
     .alert-err { background: var(--err-bg); color: var(--err-text); border: 1px solid #FCA5A5; }
     .alert-ok { background: var(--ok-bg); color: var(--ok-text); border: 1px solid #86EFAC; }
+
+    .gate-banner {
+      padding: 12px 14px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .gate-liberado { background: var(--ok-bg); color: var(--ok-text); border: 1.5px solid #86EFAC; }
+    .gate-conferencia { background: var(--warn-bg); color: var(--warn-text); border: 1.5px solid #FCD34D; }
+    .gate-bloqueado { background: var(--err-bg); color: var(--err-text); border: 1.5px solid #FCA5A5; }
+    .gate-title { font-size: 14px; font-weight: 900; margin-bottom: 4px; }
+    .gate-scores {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 11px;
+      font-weight: 800;
+    }
 
     .modal-bg {
       position: fixed;
@@ -420,6 +448,7 @@
     <!-- FASE 3: CONFERÊNCIA ESTRUTURADA E ENVIO -->
     <section id="secConferencia" style="display:none">
 
+      <div id="gateBanner" class="gate-banner gate-conferencia"></div>
       <div id="alertaDivergencia" class="alert-box alert-warn"></div>
       <div id="alertaErroValidacao" class="alert-box alert-err"></div>
 
@@ -495,7 +524,7 @@
       <!-- Confirmação de Envio para o Apps Script -->
       <div class="card">
         <button class="btn btn-spx" type="button" id="btnEnviarAppsScript" onclick="enviarParaAppsScript()">
-          🚀 ENVIAR DADOS PARA O APPS SCRIPT
+          🔒 ENVIO BLOQUEADO
         </button>
         <div id="statusEnvioFinal" class="alert-box alert-ok" style="margin-top:10px"></div>
       </div>
@@ -516,25 +545,33 @@
 
   <script>
     // ════════════════════════════════════════════════════════════════════
-    // ESTADO GLOBAL DO SCANNER PROGRESSIVO SPX (OTIMIZADO ALTA VELOCIDADE)
+    // ESTADO GLOBAL DO SCANNER PROGRESSIVO SPX (V2 OTIMIZADA)
     // ════════════════════════════════════════════════════════════════════
 
     const MAX_FAIXAS_CAPTURA = 8; // Limite ideal para folha A4 DANFE completa sem redundância
+    const LARGURA_OCR_PADRAO = 1150; // Dentro de 1050-1400 px para leitura rápida e precisa
 
     let videoStream = null;
     let capturaAtiva = false;
     let capturaPausada = false;
+    let envioEmAndamento = false;
+    let envioConcluido = false;
     let timerCaptura = null;
+    let timerFeedbackOk = null;
 
     // Pré-aquecimento do Worker Tesseract em segundo plano para leitura instantânea
     let workerTesseractPromise = null;
 
+    // Dupla qualidade: faixasOCR para leitura rápida e faixasDocumento para PDF/visualização de alta resolução
     let faixasCapturadas = [];
     let ultimaAssinatura = null;
     let ultimoTimestampFrame = 0;
     let dadosDetectadosContador = 0;
 
+    // Canvas reutilizáveis para reduzir alocações de memória no celular
     let canvasVisualizacao = document.createElement("canvas");
+    let canvasTrabalhoMetricas = document.createElement("canvas");
+    let canvasTrabalhoOcr = document.createElement("canvas");
 
     let resultadoNota = {
       numeroNota: "",
@@ -549,7 +586,7 @@
       textoBrutoCompleto: "",
       totalPalavrasLidas: 0,
       confiancaOcr: 0,
-      confiancaCampos: { numeroNota: 0, fornecedor: 0, chave: 0, valorTotal: 0 },
+      confiancaCampos: { numeroNota: 0, fornecedor: 0, chave: 0, valorTotal: 0, itens: 0 },
       divergencias: [],
       imagemVisualizacaoDataUrl: "",
       imagemComprimidaBase64: "",
@@ -568,21 +605,38 @@
       return workerTesseractPromise;
     }
 
+    function liberarMemoriaTemporaria() {
+      faixasCapturadas.forEach(function(f) {
+        if (f.canvas) { f.canvas.width = 1; f.canvas.height = 1; }
+        if (f.canvasDoc) { f.canvasDoc.width = 1; f.canvasDoc.height = 1; }
+      });
+      faixasCapturadas = [];
+      ultimaAssinatura = null;
+      canvasTrabalhoMetricas.width = 1;
+      canvasTrabalhoMetricas.height = 1;
+      canvasTrabalhoOcr.width = 1;
+      canvasTrabalhoOcr.height = 1;
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // ETAPA 1 & 2: CAPTURA PROGRESSIVA INTELIGENTE (SEM EXCESSO DE FRAMES)
     // ════════════════════════════════════════════════════════════════════
 
     async function iniciarCapturaProgressiva() {
-      faixasCapturadas = [];
-      ultimaAssinatura = null;
+      liberarMemoriaTemporaria();
       dadosDetectadosContador = 0;
       capturaPausada = false;
+      envioEmAndamento = false;
+      envioConcluido = false;
       atualizarHudProgresso();
 
       document.getElementById("secCaptura").style.display = "block";
       document.getElementById("secProcessamento").style.display = "none";
       document.getElementById("secConferencia").style.display = "none";
       document.getElementById("btnFinalizarCaptura").disabled = true;
+      document.getElementById("btnPausarRetomar").textContent = "⏸ Pausar";
+      document.getElementById("hudStatusPill").textContent = "Capturando documento";
+      document.getElementById("scanLaser").style.display = "block";
 
       try {
         if (videoStream) videoStream.getTracks().forEach(t => t.stop());
@@ -600,7 +654,7 @@
         setFeedback("Aponte para o topo da nota e desça devagar.");
 
         clearInterval(timerCaptura);
-        timerCaptura = setInterval(analisarFrameVideo, 550);
+        timerCaptura = setInterval(analisarFrameVideo, 450);
       } catch (e) {
         setFeedback("Toque em 'Capturar Sequência pela Câmera Nativa' para fotografar a nota.");
       }
@@ -624,13 +678,14 @@
         reader.onload = function(ev) {
           const img = new Image();
           img.onload = function() {
-            const c = recortarAreaDocumento(img);
-            const ass = calcularAssinaturaFaixa(c);
+            const par = capturarParQualidade(img);
+            const ass = calcularAssinaturaFaixa(par.canvasOcr);
             faixasCapturadas.push({
-              canvas: c,
+              canvas: par.canvasOcr,
+              canvasDoc: par.canvasDoc,
               assinatura: ass,
-              sobreposicaoPx: faixasCapturadas.length === 0 ? 0 : Math.round(c.height * 0.22),
-              densidadeTexto: calcularDensidadeTexto(c)
+              sobreposicaoPx: faixasCapturadas.length === 0 ? 0 : Math.round(par.canvasOcr.height * 0.22),
+              densidadeTexto: calcularDensidadeTexto(par.canvasOcr)
             });
             dadosDetectadosContador += Math.max(4, Math.round(faixasCapturadas[faixasCapturadas.length - 1].densidadeTexto * 15));
             carregadas++;
@@ -638,7 +693,7 @@
               atualizarPreviewMontagem();
               atualizarHudProgresso();
               document.getElementById("btnFinalizarCaptura").disabled = false;
-              setFeedback("Área capturada (" + faixasCapturadas.length + " parte(s)). Toque em Finalizar Leitura.");
+              notificarCapturaArea(faixasCapturadas.length, "Toque em Finalizar Leitura.");
             }
           };
           img.src = ev.target.result;
@@ -647,10 +702,24 @@
       });
     });
 
+    function avaliarQualidadeOptica(canvas) {
+      const metricas = analisarMetricasRapidas(canvas);
+      if (metricas.reflexo > 0.34) {
+        return { ok: false, msg: "⚠️ REDUZA O REFLEXO — incline levemente o celular." };
+      }
+      if (metricas.nitidez < 11.5) {
+        return { ok: false, msg: "⚠️ IMAGEM DESFOCADA — mantenha o celular parado." };
+      }
+      if (metricas.densidade < 0.03) {
+        return { ok: false, msg: "⚠️ APROXIME A CÂMERA — enquadre a nota fiscal." };
+      }
+      return { ok: true, nitidez: metricas.nitidez, densidade: metricas.densidade };
+    }
+
     function analisarFrameVideo() {
       if (!capturaAtiva || capturaPausada) return;
       if (faixasCapturadas.length >= MAX_FAIXAS_CAPTURA) {
-        setFeedback("Documento completo capturado (" + MAX_FAIXAS_CAPTURA + " áreas). Toque em Finalizar Leitura.");
+        setFeedback("✓ DOCUMENTO COMPLETO — toque em Finalizar Leitura.");
         return;
       }
 
@@ -658,55 +727,51 @@
       if (!video.videoWidth || !video.videoHeight) return;
 
       const agora = Date.now();
-      if (agora - ultimoTimestampFrame < 500) return;
+      if (agora - ultimoTimestampFrame < 380) return;
       ultimoTimestampFrame = agora;
 
-      const frameRecortado = recortarAreaDocumento(video);
+      const par = capturarParQualidade(video);
+      const frameRecortado = par.canvasOcr;
 
-      const nitidez = calcularNitidez(frameRecortado);
-      if (nitidez < 12) {
-        setFeedback("Segure o celular por um instante.");
-        return;
-      }
-
-      const densidade = calcularDensidadeTexto(frameRecortado);
-      if (densidade < 0.03) {
-        setFeedback("Aponte a moldura sobre a nota fiscal.");
+      const qualidade = avaliarQualidadeOptica(frameRecortado);
+      if (!qualidade.ok) {
+        setFeedback(qualidade.msg);
         return;
       }
 
       const assAtual = calcularAssinaturaFaixa(frameRecortado);
       if (!ultimaAssinatura) {
-        registrarNovaFaixa(frameRecortado, assAtual, 0, densidade);
-        setFeedback("Área 1 capturada. Desça pela nota...");
+        registrarNovaFaixa(frameRecortado, par.canvasDoc, assAtual, 0, qualidade.densidade);
+        notificarCapturaArea(1, "Desça devagar pela nota...");
         return;
       }
 
       const resSob = estimarSobreposicaoVertical(ultimaAssinatura, assAtual, frameRecortado.height);
 
-      // Exige deslocamento real de pelo menos 32% antes de salvar nova faixa (evita 50+ frames repetidos)
-      if (resSob.deslocamentoPx < frameRecortado.height * 0.32) {
+      // Exige deslocamento real de pelo menos 30% antes de salvar nova faixa (evita frames duplicados)
+      if (resSob.deslocamentoPx < frameRecortado.height * 0.30) {
         setFeedback("Área já capturada — continue descendo devagar.");
         return;
       }
 
       if (resSob.similaridade < 0.14 && faixasCapturadas.length > 0) {
-        setFeedback("Movimente mais devagar para não pular linhas.");
+        setFeedback("⚠️ MOVA MAIS DEVAGAR para não pular linhas.");
         return;
       }
 
-      registrarNovaFaixa(frameRecortado, assAtual, resSob.sobreposicaoPx, densidade);
+      registrarNovaFaixa(frameRecortado, par.canvasDoc, assAtual, resSob.sobreposicaoPx, qualidade.densidade);
 
       if (faixasCapturadas.length >= MAX_FAIXAS_CAPTURA) {
-        setFeedback("Captura completa! Toque em 'Finalizar Leitura'.");
+        notificarCapturaArea(faixasCapturadas.length, "✓ DOCUMENTO COMPLETO — toque em Finalizar Leitura.");
       } else {
-        setFeedback("Área " + faixasCapturadas.length + " capturada. Continue descendo...");
+        notificarCapturaArea(faixasCapturadas.length, "Continue descendo...");
       }
     }
 
-    function registrarNovaFaixa(canvasFaixa, assinatura, sobreposicaoPx, densidade) {
+    function registrarNovaFaixa(canvasFaixa, canvasDoc, assinatura, sobreposicaoPx, densidade) {
       faixasCapturadas.push({
         canvas: canvasFaixa,
+        canvasDoc: canvasDoc,
         assinatura: assinatura,
         sobreposicaoPx: sobreposicaoPx,
         densidadeTexto: densidade
@@ -719,6 +784,23 @@
       atualizarPreviewMontagem();
     }
 
+    function notificarCapturaArea(indiceArea, complemento) {
+      try {
+        if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+          navigator.vibrate(60);
+        }
+      } catch (e) {}
+
+      const el = document.getElementById("hudFeedback");
+      const texto = "✓ CAPTURA OK • ÁREA " + indiceArea + "/" + MAX_FAIXAS_CAPTURA + (complemento ? " — " + complemento : "");
+      el.textContent = texto;
+      el.classList.add("ok-flash");
+      clearTimeout(timerFeedbackOk);
+      timerFeedbackOk = setTimeout(function() {
+        el.classList.remove("ok-flash");
+      }, 950);
+    }
+
     function atualizarHudProgresso() {
       const qtd = faixasCapturadas.length;
       const pct = Math.min(100, Math.round((qtd / 6) * 100));
@@ -729,14 +811,17 @@
     }
 
     function setFeedback(msg) {
-      document.getElementById("hudFeedback").textContent = msg;
+      const el = document.getElementById("hudFeedback");
+      if (!el.classList.contains("ok-flash")) {
+        el.textContent = msg;
+      }
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // VISÃO COMPUTACIONAL: RECORTE, NITIDEZ E ASSINATURA DE SOBREPOSIÇÃO
+    // VISÃO COMPUTACIONAL: DUPLA QUALIDADE, MÉTRICAS E SOBREPOSIÇÃO
     // ════════════════════════════════════════════════════════════════════
 
-    function recortarAreaDocumento(origem) {
+    function capturarParQualidade(origem) {
       const srcW = origem.videoWidth || origem.width;
       const srcH = origem.videoHeight || origem.height;
 
@@ -745,10 +830,18 @@
       const cropW = srcW - margemX * 2;
       const cropH = srcH - margemY * 2;
 
-      // 1050px preserva 100% da nitidez dos números da DANFE e acelera o OCR em ~45%
-      const targetW = 1050;
+      // 1. Imagem Documento: resolução próxima da original (sem upscaling artificial exagerado)
+      const docTargetW = Math.min(cropW, 1800);
+      const docEscala = docTargetW / cropW;
+      const canvasDoc = document.createElement("canvas");
+      canvasDoc.width = docTargetW;
+      canvasDoc.height = Math.max(100, Math.round(cropH * docEscala));
+      canvasDoc.getContext("2d").drawImage(origem, margemX, margemY, cropW, cropH, 0, 0, canvasDoc.width, canvasDoc.height);
+
+      // 2. Imagem OCR: 1050-1400 px otimizada para leitura
+      const targetW = Math.min(Math.max(cropW, 900), LARGURA_OCR_PADRAO);
       const escala = targetW / cropW;
-      const targetH = Math.round(cropH * escala);
+      const targetH = Math.max(100, Math.round(cropH * escala));
 
       const c = document.createElement("canvas");
       c.width = targetW;
@@ -756,17 +849,19 @@
       const ctx = c.getContext("2d");
       ctx.drawImage(origem, margemX, margemY, cropW, cropH, 0, 0, targetW, targetH);
 
-      return realcarLegibilidadeSuave(c);
+      return {
+        canvasOcr: realcarLegibilidadeSuave(c),
+        canvasDoc: canvasDoc
+      };
     }
 
     function realcarLegibilidadeSuave(canvasOrigem) {
-      const out = document.createElement("canvas");
-      out.width = canvasOrigem.width;
-      out.height = canvasOrigem.height;
-      const ctx = out.getContext("2d");
+      canvasTrabalhoOcr.width = canvasOrigem.width;
+      canvasTrabalhoOcr.height = canvasOrigem.height;
+      const ctx = canvasTrabalhoOcr.getContext("2d");
       ctx.drawImage(canvasOrigem, 0, 0);
 
-      const imgData = ctx.getImageData(0, 0, out.width, out.height);
+      const imgData = ctx.getImageData(0, 0, canvasTrabalhoOcr.width, canvasTrabalhoOcr.height);
       const d = imgData.data;
 
       let soma = 0;
@@ -784,55 +879,62 @@
       }
 
       ctx.putImageData(imgData, 0, 0);
+
+      const out = document.createElement("canvas");
+      out.width = canvasTrabalhoOcr.width;
+      out.height = canvasTrabalhoOcr.height;
+      out.getContext("2d").drawImage(canvasTrabalhoOcr, 0, 0);
       return out;
     }
 
-    function calcularNitidez(canvas) {
+    function analisarMetricasRapidas(canvas) {
       const w = 140;
-      const h = Math.round((canvas.height / canvas.width) * w);
-      const tmp = document.createElement("canvas");
-      tmp.width = w;
-      tmp.height = h;
-      const ctx = tmp.getContext("2d");
+      const h = Math.max(20, Math.round((canvas.height / canvas.width) * w));
+      canvasTrabalhoMetricas.width = w;
+      canvasTrabalhoMetricas.height = h;
+      const ctx = canvasTrabalhoMetricas.getContext("2d");
       ctx.drawImage(canvas, 0, 0, w, h);
       const d = ctx.getImageData(0, 0, w, h).data;
 
       let somaGrad = 0;
-      let count = 0;
+      let countGrad = 0;
       for (let y = 1; y < h - 1; y += 2) {
         for (let x = 1; x < w - 1; x += 2) {
           const i = (y * w + x) * 4;
           somaGrad += Math.abs(d[i] - d[i + 4]) + Math.abs(d[i] - d[i + w * 4]);
-          count++;
+          countGrad++;
         }
       }
-      return count ? (somaGrad / count) : 0;
+
+      let escuros = 0;
+      let estourados = 0;
+      const totalPx = w * h;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] < 145) escuros++;
+        if (d[i] > 246) estourados++;
+      }
+
+      return {
+        nitidez: countGrad ? (somaGrad / countGrad) : 0,
+        densidade: totalPx ? (escuros / totalPx) : 0,
+        reflexo: totalPx ? (estourados / totalPx) : 0
+      };
+    }
+
+    function calcularNitidez(canvas) {
+      return analisarMetricasRapidas(canvas).nitidez;
     }
 
     function calcularDensidadeTexto(canvas) {
-      const w = 140;
-      const h = Math.round((canvas.height / canvas.width) * w);
-      const tmp = document.createElement("canvas");
-      tmp.width = w;
-      tmp.height = h;
-      const ctx = tmp.getContext("2d");
-      ctx.drawImage(canvas, 0, 0, w, h);
-      const d = ctx.getImageData(0, 0, w, h).data;
-
-      let escuros = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        if (d[i] < 145) escuros++;
-      }
-      return escuros / (w * h);
+      return analisarMetricasRapidas(canvas).densidade;
     }
 
     function calcularAssinaturaFaixa(canvas) {
       const w = 80;
       const h = 80;
-      const tmp = document.createElement("canvas");
-      tmp.width = w;
-      tmp.height = h;
-      const ctx = tmp.getContext("2d");
+      canvasTrabalhoMetricas.width = w;
+      canvasTrabalhoMetricas.height = h;
+      const ctx = canvasTrabalhoMetricas.getContext("2d");
       ctx.drawImage(canvas, 0, 0, w, h);
       const d = ctx.getImageData(0, 0, w, h).data;
 
@@ -876,16 +978,21 @@
     }
 
     // Une faixas num intervalo [inicio, fim) eliminando sobreposição repetida
-    function unirIntervaloFaixas(listaFaixas, larguraDestino) {
-      const larguraBase = listaFaixas[0].canvas.width;
+    function unirIntervaloFaixas(listaFaixas, larguraDestino, usarDocAltaQualidade) {
+      const propCanvas = usarDocAltaQualidade ? "canvasDoc" : "canvas";
+      const primeira = listaFaixas[0][propCanvas] || listaFaixas[0].canvas;
+      const larguraBase = primeira.width;
       const escala = larguraDestino / larguraBase;
       let alturaTotal = 0;
 
       listaFaixas.forEach(function(f, idx) {
+        const cAtual = f[propCanvas] || f.canvas;
+        const proporcaoFator = cAtual.height / (f.canvas.height || cAtual.height);
+        const sobAjustada = Math.round((f.sobreposicaoPx || 0) * proporcaoFator);
         if (idx === 0) {
-          alturaTotal += f.canvas.height;
+          alturaTotal += cAtual.height;
         } else {
-          const util = Math.max(Math.round(f.canvas.height * 0.25), f.canvas.height - f.sobreposicaoPx);
+          const util = Math.max(Math.round(cAtual.height * 0.25), cAtual.height - sobAjustada);
           alturaTotal += util;
         }
       });
@@ -899,15 +1006,19 @@
 
       let cursorY = 0;
       listaFaixas.forEach(function(f, idx) {
+        const cAtual = f[propCanvas] || f.canvas;
+        const proporcaoFator = cAtual.height / (f.canvas.height || cAtual.height);
+        const sobAjustada = Math.round((f.sobreposicaoPx || 0) * proporcaoFator);
+
         if (idx === 0) {
-          const hDest = Math.round(f.canvas.height * escala);
-          ctx.drawImage(f.canvas, 0, 0, f.canvas.width, f.canvas.height, 0, cursorY, out.width, hDest);
+          const hDest = Math.round(cAtual.height * escala);
+          ctx.drawImage(cAtual, 0, 0, cAtual.width, cAtual.height, 0, cursorY, out.width, hDest);
           cursorY += hDest;
         } else {
-          const corteTop = Math.min(Math.round(f.canvas.height * 0.72), f.sobreposicaoPx);
-          const alturaSrc = f.canvas.height - corteTop;
+          const corteTop = Math.min(Math.round(cAtual.height * 0.72), sobAjustada);
+          const alturaSrc = cAtual.height - corteTop;
           const hDest = Math.round(alturaSrc * escala);
-          ctx.drawImage(f.canvas, 0, corteTop, f.canvas.width, alturaSrc, 0, cursorY, out.width, hDest);
+          ctx.drawImage(cAtual, 0, corteTop, cAtual.width, alturaSrc, 0, cursorY, out.width, hDest);
           cursorY += hDest;
         }
       });
@@ -915,13 +1026,15 @@
       return out;
     }
 
-    function reconstruirCanvasCompleto(paraPreview) {
+    function reconstruirCanvasCompleto(paraPreview, usarDocAltaQualidade) {
       if (faixasCapturadas.length === 0) return null;
-      const larguraBase = faixasCapturadas[0].canvas.width;
-      return unirIntervaloFaixas(faixasCapturadas, paraPreview ? 120 : larguraBase);
+      const prop = usarDocAltaQualidade ? "canvasDoc" : "canvas";
+      const primeira = faixasCapturadas[0][prop] || faixasCapturadas[0].canvas;
+      const larguraBase = primeira.width;
+      return unirIntervaloFaixas(faixasCapturadas, paraPreview ? 120 : larguraBase, Boolean(usarDocAltaQualidade));
     }
 
-    // Agrupa as faixas em no máximo 3 super-blocos verticais para OCR ultrarrápido (3 chamadas em vez de 57!)
+    // Agrupa as faixas em no máximo 3 super-blocos verticais para OCR ultrarrápido
     function gerarBlocosConsolidadosParaOcr() {
       const n = faixasCapturadas.length;
       if (n <= 3) {
@@ -932,13 +1045,13 @@
       const blocos = [];
       for (let i = 0; i < n; i += tamGrupo) {
         const subLista = faixasCapturadas.slice(i, i + tamGrupo);
-        blocos.push(unirIntervaloFaixas(subLista, subLista[0].canvas.width));
+        blocos.push(unirIntervaloFaixas(subLista, subLista[0].canvas.width, false));
       }
       return blocos;
     }
 
     function atualizarPreviewMontagem() {
-      const mini = reconstruirCanvasCompleto(true);
+      const mini = reconstruirCanvasCompleto(true, false);
       if (!mini) return;
       const dest = document.getElementById("canvasStitchPreview");
       dest.width = mini.width;
@@ -949,7 +1062,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // ETAPA 6: OCR ULTRARRÁPIDO EM ATÉ 3 BLOCOS CONSOLIDADOS
+    // ETAPA 6: OCR ULTRARRÁPIDO + ESTRATÉGIA COMPLEMENTAR SOB DEMANDA
     // ════════════════════════════════════════════════════════════════════
 
     function marcarEtapa(num, statusTxt) {
@@ -1001,6 +1114,58 @@
       return lista;
     }
 
+    function criarRecorteAltoContraste(canvasOrigem, sy, sh) {
+      const c = document.createElement("canvas");
+      c.width = canvasOrigem.width;
+      c.height = sh;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(canvasOrigem, 0, sy, canvasOrigem.width, sh, 0, 0, c.width, c.height);
+      const img = ctx.getImageData(0, 0, c.width, c.height);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const bin = d[i] > 168 ? 255 : 0;
+        d[i] = d[i + 1] = d[i + 2] = bin;
+      }
+      ctx.putImageData(img, 0, 0);
+      return c;
+    }
+
+    async function executarOcrAlternativoSeNecessario(worker, blocosOcr, textoConsolidado) {
+      const chavePrevia = extrairChaveNfeValidada(textoConsolidado);
+      const totaisPrevios = extrairTotaisDanfe(textoConsolidado.split(/\r?\n/), textoConsolidado);
+      const precisaReforco = !chavePrevia.chave || chavePrevia.confiancaChave < 90 || totaisPrevios.valorTotalNf <= 0;
+
+      if (!precisaReforco || blocosOcr.length === 0) {
+        return "";
+      }
+
+      const textosExtra = [];
+      const primeiro = blocosOcr[0];
+      const hTopo = Math.min(primeiro.height, Math.round(primeiro.height * 0.55));
+      if (hTopo > 40) {
+        const recorteTopo = criarRecorteAltoContraste(primeiro, 0, hTopo);
+        const resTopo = await worker.recognize(recorteTopo, {}, { text: true });
+        if (resTopo.data && resTopo.data.text) textosExtra.push(resTopo.data.text);
+        recorteTopo.width = 1;
+        recorteTopo.height = 1;
+      }
+
+      if (totaisPrevios.valorTotalNf <= 0) {
+        const ultimo = blocosOcr[blocosOcr.length - 1];
+        const yBase = Math.max(0, Math.round(ultimo.height * 0.45));
+        const hBase = ultimo.height - yBase;
+        if (hBase > 40) {
+          const recorteBase = criarRecorteAltoContraste(ultimo, yBase, hBase);
+          const resBase = await worker.recognize(recorteBase, {}, { text: true });
+          if (resBase.data && resBase.data.text) textosExtra.push(resBase.data.text);
+          recorteBase.width = 1;
+          recorteBase.height = 1;
+        }
+      }
+
+      return textosExtra.join("\n");
+    }
+
     async function finalizarCapturaEProcessar() {
       if (faixasCapturadas.length === 0) return;
 
@@ -1012,18 +1177,18 @@
       document.getElementById("secProcessamento").style.display = "block";
 
       try {
-        // ETAPA 1-3: Reconstrução panorâmica para visualização e PDF
+        // ETAPA 1-3: Reconstrução panorâmica de alta qualidade para visualização e PDF
         marcarEtapa(1, "⏳ Montando...");
-        canvasVisualizacao = reconstruirCanvasCompleto(false);
-        resultadoNota.imagemVisualizacaoDataUrl = canvasVisualizacao.toDataURL("image/jpeg", 0.85);
+        canvasVisualizacao = reconstruirCanvasCompleto(false, true);
+        resultadoNota.imagemVisualizacaoDataUrl = canvasVisualizacao.toDataURL("image/jpeg", 0.88);
         marcarEtapa(1, "✅ OK");
 
-        // ETAPA 4-5: Consolida faixas em no máximo 3 super-blocos
+        // ETAPA 4-5: Consolida faixas em no máximo 3 super-blocos OCR
         marcarEtapa(2, "⏳ Consolidando...");
         const blocosOcr = gerarBlocosConsolidadosParaOcr();
         marcarEtapa(2, "✅ " + blocosOcr.length + " bloco(s)");
 
-        // ETAPA 6: OCR com worker pré-aquecido (em no máximo 3 chamadas!)
+        // ETAPA 6: OCR com worker pré-aquecido
         marcarEtapa(3, "⏳ Lendo 0/" + blocosOcr.length + "...");
         const todasPalavras = [];
         const textosPorBloco = [];
@@ -1043,7 +1208,12 @@
           offsetYAcumulado += cBloco.height;
         }
 
-        const textoConsolidado = textosPorBloco.join("\n");
+        let textoConsolidado = textosPorBloco.join("\n");
+        const textoAlternativo = await executarOcrAlternativoSeNecessario(worker, blocosOcr, textoConsolidado);
+        if (textoAlternativo) {
+          textoConsolidado = textoConsolidado + "\n" + textoAlternativo;
+        }
+
         marcarEtapa(3, "✅ " + todasPalavras.length + " palavras");
 
         // ETAPA 7-8: Interpretação estruturada DANFE
@@ -1055,6 +1225,9 @@
         marcarEtapa(5, "⏳ Gerando PDF...");
         gerarPdfDaNotaReconstruida();
         marcarEtapa(5, "✅ PDF Pronto");
+
+        // Libera canvases temporários de captura após montagem final
+        liberarMemoriaTemporaria();
 
         setTimeout(abrirTelaConferencia, 200);
       } catch (erro) {
@@ -1120,20 +1293,28 @@
 
       if (valorTotalFinal <= 0 && somaItens > 0) {
         valorTotalFinal = Number(somaItens.toFixed(2));
-        confTotal = 80;
+        confTotal = 75;
       }
+
+      const itensInconsistentes = itensExtraidos.filter(it => it.statusValidacao === "CONFERIR").length;
+      const confItens = itensExtraidos.length === 0
+        ? 40
+        : Math.max(25, Math.round(((itensExtraidos.length - itensInconsistentes) / itensExtraidos.length) * 95));
 
       const divergencias = [];
       if (valorTotalFinal > 0 && somaItens > 0 && Math.abs(valorTotalFinal - somaItens) > 0.25) {
+        const diff = Math.abs(valorTotalFinal - somaItens);
         divergencias.push(
-          "⚠️ Divergência entre itens (R$ " + somaItens.toFixed(2) + ") e total da NF (R$ " + valorTotalFinal.toFixed(2) + ")."
+          "⚠️ DIVERGÊNCIA DE VALORES — Total da NF: R$ " + valorTotalFinal.toFixed(2) +
+          " • Soma dos itens: R$ " + somaItens.toFixed(2) +
+          " • Diferença: R$ " + diff.toFixed(2)
         );
       }
-      if (itensExtraidos.some(it => it.statusValidacao === "CONFERIR")) {
-        divergencias.push("Alguns itens foram marcados como CONFERIR — revise quantidade e valor unitário.");
+      if (itensInconsistentes > 0) {
+        divergencias.push("⚠️ " + itensInconsistentes + " item(ns) com Quantidade × Unitário divergente do Valor Total.");
       }
 
-      const confGeral = Math.round((confiancaChave + confiancaNum + confiancaForn + confTotal) / 4);
+      const confGeral = Math.round((confiancaChave + confiancaNum + confiancaForn + confTotal + confItens) / 5);
 
       resultadoNota = {
         numeroNota: numeroNota,
@@ -1152,7 +1333,8 @@
           numeroNota: Math.round(confiancaNum),
           fornecedor: Math.round(confiancaForn),
           chave: Math.round(confiancaChave),
-          valorTotal: Math.round(confTotal)
+          valorTotal: Math.round(confTotal),
+          itens: Math.round(confItens)
         },
         divergencias: divergencias,
         imagemVisualizacaoDataUrl: resultadoNota.imagemVisualizacaoDataUrl,
@@ -1200,20 +1382,29 @@
 
       let melhor = "";
       let melhorScore = 0;
+      let dvValido = false;
 
       candidatos.forEach(function(cand) {
-        let score = 45;
-        if (validarDigitoChaveNfe(cand)) score += 54;
-        if (/^(1[1-9]|2[1-9]|3[1-5]|4[1-3]|5[0-3])/.test(cand)) score += 4;
+        let score = 40;
+        const okDv = validarDigitoChaveNfe(cand);
+        if (okDv) {
+          score += 56;
+          dvValido = true;
+        }
+        if (/^(1[1-9]|2[1-9]|3[1-5]|4[1-3]|5[0-3])/.test(cand)) score += 3;
         if (score > melhorScore) {
           melhorScore = score;
           melhor = cand;
         }
       });
 
+      if (!melhor) {
+        return { chave: "", confiancaChave: 0 };
+      }
+
       return {
-        chave: melhorScore >= 49 ? melhor : "",
-        confiancaChave: melhorScore >= 49 ? Math.min(99, melhorScore) : 0
+        chave: melhor,
+        confiancaChave: dvValido ? Math.min(100, melhorScore) : 42
       };
     }
 
@@ -1223,7 +1414,7 @@
       let dataEmissao = "";
       let conf = 0;
 
-      if (chave && chave.length === 44) {
+      if (chave && chave.length === 44 && validarDigitoChaveNfe(chave)) {
         serie = String(parseInt(chave.substring(22, 25), 10) || "1");
         numeroNota = String(parseInt(chave.substring(25, 34), 10) || "");
         conf = 96;
@@ -1234,9 +1425,12 @@
         const numLido = mNf[1].replace(/\./g, "");
         if (!numeroNota) {
           numeroNota = numLido;
-          conf = 88;
+          conf = 85;
         } else if (numeroNota === numLido) {
           conf = 99;
+        } else {
+          // Ambiguidade entre número lido na NF e chave: mantém leitura principal e sinaliza conferência
+          conf = 62;
         }
       }
 
@@ -1265,7 +1459,7 @@
           const prox = linhasTexto[i + 1].replace(/[^A-Z0-9\s.&-]/gi, "").trim();
           if (prox.length >= 4 && !/DANFE|CNPJ|DOCUMENTO/.test(prox.toUpperCase())) {
             fornecedor = prox.slice(0, 75);
-            conf = 92;
+            conf = fornecedor.length < 8 ? 42 : 92;
             break;
           }
         }
@@ -1276,7 +1470,10 @@
 
         if (!fornecedor && txt.length >= 5 && /[A-Z]{3,}/.test(up) && !/^\d+$/.test(txt)) {
           fornecedor = txt.replace(/[^A-Z0-9\s.&-]/gi, "").trim().slice(0, 75);
-          conf = 84;
+          // Marca baixa confiança se parecer fragmento truncado (ex.: "ESA E O")
+          const palavrasCurta = fornecedor.split(/\s+/).filter(Boolean);
+          const pareceFragmento = fornecedor.length < 8 || (palavrasCurta.length >= 2 && palavrasCurta[palavrasCurta.length - 1].length === 1);
+          conf = pareceFragmento ? 42 : 84;
         }
       }
 
@@ -1302,7 +1499,9 @@
 
       const padroes = [
         /VALOR\s+TOTAL\s+DA\s+NOTA[^\d]{0,30}(\d{1,3}(?:\.\d{3})*,\d{2})/i,
+        /VALOR\s+TOTAL\s+DA\s+NF[^\d]{0,30}(\d{1,3}(?:\.\d{3})*,\d{2})/i,
         /V\.?\s*TOTAL\s+DA\s+NOTA[^\d]{0,30}(\d{1,3}(?:\.\d{3})*,\d{2})/i,
+        /VALOR\s+DA\s+NOTA[^\d]{0,30}(\d{1,3}(?:\.\d{3})*,\d{2})/i,
         /VALOR\s+TOTAL\s+DOS\s+PRODUTOS[^\d]{0,30}(\d{1,3}(?:\.\d{3})*,\d{2})/i
       ];
 
@@ -1474,43 +1673,165 @@
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // ETAPA 10: PDF COM IMAGEM DIGITALIZADA COMPLETA
+    // ETAPA 10: PDF COMPROVANTE SPX + DOCUMENTO ORIGINAL RECONSTRUÍDO
     // ════════════════════════════════════════════════════════════════════
+
+    function obterDadosConferenciaAtuais() {
+      const numNota = (document.getElementById("editNumNota")?.value ?? resultadoNota.numeroNota ?? "").trim();
+      const fornecedor = (document.getElementById("editFornecedor")?.value ?? resultadoNota.fornecedor ?? "").trim();
+      const chave = (document.getElementById("editChave")?.value ?? resultadoNota.chave ?? "").replace(/\D/g, "");
+      const valorTotal = parseFloat(document.getElementById("editValorTotal")?.value) || resultadoNota.valorTotal || 0;
+      return { numNota, fornecedor, chave, valorTotal };
+    }
 
     function gerarPdfDaNotaReconstruida() {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const dados = obterDadosConferenciaAtuais();
+      const dataStr = resultadoNota.dataEmissao || new Date().toLocaleDateString("pt-BR");
 
-      const wImg = canvasVisualizacao.width;
-      const hImg = canvasVisualizacao.height;
-      const ratio = Math.min(194 / wImg, 281 / hImg);
-      const drawW = wImg * ratio;
-      const drawH = hImg * ratio;
-      const offsetX = (210 - drawW) / 2;
+      // Página 1: Comprovante Estruturado SPX
+      pdf.setFillColor(238, 77, 45);
+      pdf.rect(12, 10, 186, 11, "F");
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.text("SPX — RECEBIMENTO DE NOTA FISCAL", 16, 17);
 
-      pdf.addImage(resultadoNota.imagemVisualizacaoDataUrl, "JPEG", offsetX, 8, drawW, drawH);
+      pdf.setTextColor(24, 28, 36);
+      pdf.setFontSize(9.5);
+      let y = 28;
+      const linhasCab = [
+        "NF: " + (dados.numNota || "-"),
+        "FORNECEDOR: " + (dados.fornecedor || "-") + (resultadoNota.confiancaCampos.fornecedor < 60 ? " [CONFERIR]" : ""),
+        "CHAVE NF-e: " + (dados.chave || "Não informada"),
+        "DATA: " + dataStr,
+        "RECEBIDO POR: Conferente SPX",
+        "VALOR TOTAL: R$ " + Number(dados.valorTotal || 0).toFixed(2)
+      ];
+      linhasCab.forEach(function(ln) {
+        pdf.text(ln, 14, y);
+        y += 5.5;
+      });
+
+      y += 3;
+      pdf.setFont("helvetica", "bold");
+      pdf.text("ITENS RECEBIDOS", 14, y);
+      y += 5;
+      pdf.setFontSize(8.5);
+      pdf.text("Produto", 14, y);
+      pdf.text("Qtd", 118, y);
+      pdf.text("Valor Unit.", 138, y);
+      pdf.text("Valor Total", 168, y);
+      y += 2;
+      pdf.line(14, y, 196, y);
+      y += 4.5;
+
+      pdf.setFont("helvetica", "normal");
+      (resultadoNota.itens || []).slice(0, 28).forEach(function(it) {
+        if (y > 275) return;
+        const flag = it.statusValidacao === "CONFERIR" ? " [?]" : "";
+        const nome = String(it.produto || "-").slice(0, 46) + flag;
+        pdf.text(nome, 14, y);
+        pdf.text(String(it.quantidade ?? 0), 118, y);
+        pdf.text("R$ " + Number(it.valorUnitario || 0).toFixed(2), 138, y);
+        pdf.text("R$ " + Number(it.valorTotal || 0).toFixed(2), 168, y);
+        y += 4.8;
+      });
+
+      // Página 2: Documento Original / Reconstruído para Auditoria
+      if (resultadoNota.imagemVisualizacaoDataUrl && canvasVisualizacao.width > 1 && canvasVisualizacao.height > 1) {
+        pdf.addPage();
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(10);
+        pdf.text("DOCUMENTO RECONSTRUÍDO PARA AUDITORIA", 14, 12);
+
+        const wImg = canvasVisualizacao.width;
+        const hImg = canvasVisualizacao.height;
+        const ratio = Math.min(186 / wImg, 268 / hImg);
+        const drawW = wImg * ratio;
+        const drawH = hImg * ratio;
+        const offsetX = (210 - drawW) / 2;
+
+        pdf.addImage(resultadoNota.imagemVisualizacaoDataUrl, "JPEG", offsetX, 16, drawW, drawH);
+      }
 
       const canvasEnvio = document.createElement("canvas");
-      const maxLargEnvio = 950;
+      const maxLargEnvio = 1100;
       const escEnvio = canvasVisualizacao.width > maxLargEnvio ? (maxLargEnvio / canvasVisualizacao.width) : 1;
-      canvasEnvio.width = Math.round(canvasVisualizacao.width * escEnvio);
-      canvasEnvio.height = Math.round(canvasVisualizacao.height * escEnvio);
+      canvasEnvio.width = Math.max(1, Math.round(canvasVisualizacao.width * escEnvio));
+      canvasEnvio.height = Math.max(1, Math.round(canvasVisualizacao.height * escEnvio));
       canvasEnvio.getContext("2d").drawImage(canvasVisualizacao, 0, 0, canvasEnvio.width, canvasEnvio.height);
 
-      resultadoNota.imagemComprimidaBase64 = canvasEnvio.toDataURL("image/jpeg", 0.68).split(",")[1];
+      resultadoNota.imagemComprimidaBase64 = canvasEnvio.toDataURL("image/jpeg", 0.72).split(",")[1];
       resultadoNota.pdfBase64 = pdf.output("datauristring").split(",")[1];
+      canvasEnvio.width = 1;
+      canvasEnvio.height = 1;
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // ETAPA 9 & 11: TELA DE CONFERÊNCIA EDITÁVEL E RETORNO AO APPS SCRIPT
+    // QUALITY GATE + TELA DE CONFERÊNCIA EDITÁVEL + APPS SCRIPT
     // ════════════════════════════════════════════════════════════════════
+
+    function validarQualidadeAntesDoEnvio() {
+      const numNota = (document.getElementById("editNumNota")?.value ?? "").trim();
+      const fornecedor = (document.getElementById("editFornecedor")?.value ?? "").trim();
+      const chave = (document.getElementById("editChave")?.value ?? "").replace(/\D/g, "");
+      const valorTotal = parseFloat(document.getElementById("editValorTotal")?.value) || 0;
+      const itens = resultadoNota.itens || [];
+      const somaItens = itens.reduce((acc, it) => acc + (Number(it.valorTotal) || 0), 0);
+
+      const chaveOk = chave.length === 44 && validarDigitoChaveNfe(chave);
+      const itensInconsistentes = itens.filter(it => it.statusValidacao === "CONFERIR").length;
+      const diferencaRelevante = valorTotal > 0 && somaItens > 0 && Math.abs(valorTotal - somaItens) > 0.25;
+
+      const bloqueios = [];
+      if (!numNota) bloqueios.push("Número da NF obrigatório.");
+      if (!fornecedor) bloqueios.push("Fornecedor/Emitente obrigatório.");
+      if (!chave || chave.length !== 44) {
+        bloqueios.push("Chave NF-e deve conter 44 dígitos.");
+      } else if (!chaveOk) {
+        bloqueios.push("🔴 CHAVE NF-e NÃO VALIDADA — dígito verificador inválido.");
+      }
+      if (valorTotal <= 0) bloqueios.push("Valor total da NF deve ser maior que R$ 0,00.");
+      if (!resultadoNota.imagemVisualizacaoDataUrl) bloqueios.push("Documento digitalizado ausente.");
+
+      const pendenciasConferencia = [];
+      if (itensInconsistentes > 0) {
+        pendenciasConferencia.push(itensInconsistentes + " item(ns) precisam de conferência.");
+      }
+      if (diferencaRelevante) {
+        pendenciasConferencia.push("Divergência entre soma dos itens e valor total da NF.");
+      }
+      if (resultadoNota.confiancaCampos.fornecedor > 0 && resultadoNota.confiancaCampos.fornecedor < 60 && fornecedor.length < 8) {
+        pendenciasConferencia.push("Conferir fornecedor (baixa confiança OCR).");
+      }
+
+      let classificacao = "LIBERADO";
+      if (bloqueios.length > 0) {
+        classificacao = "BLOQUEADO";
+      } else if (pendenciasConferencia.length > 0) {
+        classificacao = "CONFERENCIA";
+      }
+
+      return {
+        classificacao,
+        permitirEnvio: classificacao !== "BLOQUEADO",
+        bloqueios,
+        pendenciasConferencia,
+        chaveOk,
+        somaItens,
+        valorTotal,
+        itensInconsistentes
+      };
+    }
 
     function abrirTelaConferencia() {
       document.getElementById("secProcessamento").style.display = "none";
       document.getElementById("secConferencia").style.display = "block";
 
       document.getElementById("txtResumoAreas").textContent =
-        "Reconstruído a partir de " + faixasCapturadas.length + " área(s) • " + resultadoNota.totalPalavrasLidas + " palavras lidas";
+        "Reconstruído a partir de área(s) • " + resultadoNota.totalPalavrasLidas + " palavras lidas";
 
       document.getElementById("txtOcrBrutoDebug").value = resultadoNota.textoBrutoCompleto || "(Nenhum texto detectado — aproxime mais a câmera da nota)";
 
@@ -1558,8 +1879,8 @@
             '<div>' +
               '<strong style="font-size:12px">Produto ' + String(idx + 1).padStart(2, "0") + '</strong> ' +
               (precisaConferir
-                ? '<span class="tag-conferir">CONFERIR</span>'
-                : '<span class="tag-ok">OK (' + (it.confianca || 85) + '%)</span>') +
+                ? '<span class="tag-conferir">⚠ CONFERIR</span>'
+                : '<span class="tag-ok">✓ OK (' + (it.confianca || 85) + '%)</span>') +
             '</div>' +
             '<button type="button" class="btn btn-outline btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="removerItem(' + idx + ')">Excluir</button>' +
           '</div>' +
@@ -1618,38 +1939,83 @@
     }
 
     function validarEstadoConferencia() {
-      const numNota = document.getElementById("editNumNota").value.trim();
-      const fornecedor = document.getElementById("editFornecedor").value.trim();
-      const chave = document.getElementById("editChave").value.replace(/\D/g, "");
-      const valorTotal = parseFloat(document.getElementById("editValorTotal").value) || 0;
-      const itens = resultadoNota.itens || [];
-      const somaItens = itens.reduce((acc, it) => acc + (Number(it.valorTotal) || 0), 0);
+      const gate = validarQualidadeAntesDoEnvio();
+      const numNota = (document.getElementById("editNumNota")?.value ?? "").trim();
+      const fornecedor = (document.getElementById("editFornecedor")?.value ?? "").trim();
+      const chave = (document.getElementById("editChave")?.value ?? "").replace(/\D/g, "");
+      const valorTotal = parseFloat(document.getElementById("editValorTotal")?.value) || 0;
+      const somaItens = gate.somaItens;
 
       document.getElementById("txtSomaItens").textContent = "R$ " + somaItens.toFixed(2);
 
+      // Destaque visual apenas nos campos que exigem atenção do operador
+      const elNum = document.getElementById("editNumNota");
+      const elForn = document.getElementById("editFornecedor");
+      const elChave = document.getElementById("editChave");
+      const elTot = document.getElementById("editValorTotal");
+
+      elNum.classList.toggle("campo-atencao", !numNota || resultadoNota.confiancaCampos.numeroNota < 75);
+      elForn.classList.toggle("campo-atencao", !fornecedor || resultadoNota.confiancaCampos.fornecedor < 65);
+      elChave.classList.toggle("campo-atencao", !gate.chaveOk);
+      elTot.classList.toggle("campo-atencao", valorTotal <= 0 || resultadoNota.confiancaCampos.valorTotal < 75);
+
       const boxDiv = document.getElementById("alertaDivergencia");
       if (valorTotal > 0 && somaItens > 0 && Math.abs(valorTotal - somaItens) > 0.25) {
-        boxDiv.textContent = "⚠️ Divergência entre itens (R$ " + somaItens.toFixed(2) + ") e total da NF (R$ " + valorTotal.toFixed(2) + "). Confira antes de enviar.";
+        const diff = Math.abs(valorTotal - somaItens);
+        boxDiv.textContent =
+          "⚠️ DIVERGÊNCIA DE VALORES — Total da NF: R$ " + valorTotal.toFixed(2) +
+          " • Soma dos itens: R$ " + somaItens.toFixed(2) +
+          " • Diferença: R$ " + diff.toFixed(2);
         boxDiv.style.display = "block";
       } else {
         boxDiv.style.display = "none";
       }
 
-      const erros = [];
-      if (!numNota) erros.push("Número da NF obrigatório.");
-      if (!fornecedor) erros.push("Fornecedor/Emitente obrigatório.");
-      if (chave && chave.length !== 44) erros.push("Chave NF-e deve conter 44 dígitos.");
-      if (valorTotal <= 0) erros.push("Valor total da NF não pode ser R$ 0,00.");
-
       const boxErr = document.getElementById("alertaErroValidacao");
-      if (erros.length > 0) {
-        boxErr.textContent = "Atenção: " + erros.join(" ");
+      if (gate.bloqueios.length > 0) {
+        boxErr.textContent = "Atenção: " + gate.bloqueios.join(" ");
         boxErr.style.display = "block";
       } else {
         boxErr.style.display = "none";
       }
 
-      return erros.length === 0;
+      const banner = document.getElementById("gateBanner");
+      const btnEnvio = document.getElementById("btnEnviarAppsScript");
+      const c = resultadoNota.confiancaCampos;
+
+      const scoresHtml =
+        '<div class="gate-scores">' +
+          '<span>NF: ' + (c.numeroNota || 0) + '%</span>' +
+          '<span>Fornecedor: ' + (c.fornecedor || 0) + '%</span>' +
+          '<span>Chave: ' + (gate.chaveOk ? Math.max(96, c.chave || 96) : (c.chave || 0)) + '%</span>' +
+          '<span>Total: ' + (c.valorTotal || 0) + '%</span>' +
+          '<span>Itens: ' + (c.itens || 0) + '%</span>' +
+        '</div>';
+
+      if (gate.classificacao === "BLOQUEADO") {
+        banner.className = "gate-banner gate-bloqueado";
+        banner.innerHTML =
+          '<div class="gate-title">🔴 BLOQUEADO — NÃO É POSSÍVEL ENVIAR</div>' +
+          '<div>' + gate.bloqueios.join(" • ") + '</div>' + scoresHtml;
+        btnEnvio.disabled = true;
+        btnEnvio.textContent = "🔒 ENVIO BLOQUEADO";
+      } else if (gate.classificacao === "CONFERENCIA") {
+        banner.className = "gate-banner gate-conferencia";
+        banner.innerHTML =
+          '<div class="gate-title">🟡 CONFERÊNCIA — REVISE OS PONTOS DESTACADOS</div>' +
+          '<div>' + gate.pendenciasConferencia.join(" • ") + '</div>' + scoresHtml;
+        btnEnvio.disabled = envioEmAndamento || envioConcluido;
+        btnEnvio.textContent = envioConcluido ? "✓ ENVIO CONCLUÍDO" : (envioEmAndamento ? "ENVIANDO..." : "🚀 ENVIAR");
+      } else {
+        banner.className = "gate-banner gate-liberado";
+        banner.innerHTML =
+          '<div class="gate-title">🟢 LIBERADO — DADOS VÁLIDOS PARA ENVIO</div>' +
+          '<div>✓ Documento válido • ✓ Chave validada • ✓ Valores consistentes</div>' + scoresHtml;
+        btnEnvio.disabled = envioEmAndamento || envioConcluido;
+        btnEnvio.textContent = envioConcluido ? "✓ ENVIO CONCLUÍDO" : (envioEmAndamento ? "ENVIANDO..." : "🚀 ENVIAR");
+      }
+
+      return gate.permitirEnvio;
     }
 
     function abrirModalDocumento() {
@@ -1666,72 +2032,97 @@
     }
 
     async function enviarParaAppsScript() {
-      if (!validarEstadoConferencia()) {
+      if (envioEmAndamento || envioConcluido) return;
+      if (!validarQualidadeAntesDoEnvio().permitirEnvio) {
         alert("Corrija os campos obrigatórios destacados antes de enviar ao Apps Script.");
         return;
       }
 
-      const numNota = document.getElementById("editNumNota").value.trim();
-      const fornecedor = document.getElementById("editFornecedor").value.trim();
-      const chave = document.getElementById("editChave").value.replace(/\D/g, "");
-      const valorTotal = parseFloat(document.getElementById("editValorTotal").value) || 0;
-      const itensValidos = (resultadoNota.itens || []).filter(it => String(it.produto || "").trim().length > 0);
-
-      const payloadCompat = {
-        numeroNota: numNota,
-        fornecedor: fornecedor,
-        chave: chave,
-        valorTotal: Number(valorTotal.toFixed(2)),
-        itens: itensValidos.map(it => ({
-          codigo: it.codigo || "-",
-          produto: it.produto,
-          descricao: it.descricao || it.produto,
-          unidade: it.unidade || "UN",
-          quantidade: it.quantidade,
-          valorUnitario: it.valorUnitario,
-          valorTotal: it.valorTotal
-        })),
-        imagemBase64: resultadoNota.imagemComprimidaBase64,
-        pdfBase64: resultadoNota.pdfBase64,
-        confiancaOcr: resultadoNota.confiancaOcr,
-        dadosExtraidos: {
-          serie: resultadoNota.serie,
-          dataEmissao: resultadoNota.dataEmissao,
-          cnpjEmitente: resultadoNota.cnpjEmitente
-        },
-        confiancaCampos: resultadoNota.confiancaCampos,
-        imagemDigitalizadaBase64: resultadoNota.imagemComprimidaBase64,
-        statusProcessamento: "CONFERENCIA_SCANNER_OK",
-        divergencias: resultadoNota.divergencias,
-        areasCapturadas: faixasCapturadas.length
-      };
-
+      envioEmAndamento = true;
+      const btnEnvio = document.getElementById("btnEnviarAppsScript");
       const statusEl = document.getElementById("statusEnvioFinal");
+      btnEnvio.disabled = true;
+      btnEnvio.textContent = "ENVIANDO...";
+      statusEl.style.display = "none";
 
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage({
-          tipo: "SPX_SCANNER_RESULTADO",
-          dados: payloadCompat
-        }, "*");
-        statusEl.textContent = "✅ Dados estruturados, imagem e PDF enviados para o Apps Script!";
+      try {
+        gerarPdfDaNotaReconstruida();
+
+        const numNota = document.getElementById("editNumNota").value.trim();
+        const fornecedor = document.getElementById("editFornecedor").value.trim();
+        const chave = document.getElementById("editChave").value.replace(/\D/g, "");
+        const valorTotal = parseFloat(document.getElementById("editValorTotal").value) || 0;
+        const itensValidos = (resultadoNota.itens || []).filter(it => String(it.produto || "").trim().length > 0);
+
+        const payloadCompat = {
+          numeroNota: numNota,
+          fornecedor: fornecedor,
+          chave: chave,
+          valorTotal: Number(valorTotal.toFixed(2)),
+          itens: itensValidos.map(it => ({
+            codigo: it.codigo || "-",
+            produto: it.produto,
+            descricao: it.descricao || it.produto,
+            unidade: it.unidade || "UN",
+            quantidade: it.quantidade,
+            valorUnitario: it.valorUnitario,
+            valorTotal: it.valorTotal
+          })),
+          imagemBase64: resultadoNota.imagemComprimidaBase64,
+          pdfBase64: resultadoNota.pdfBase64,
+          confiancaOcr: resultadoNota.confiancaOcr,
+          dadosExtraidos: {
+            serie: resultadoNota.serie,
+            dataEmissao: resultadoNota.dataEmissao,
+            cnpjEmitente: resultadoNota.cnpjEmitente
+          },
+          confiancaCampos: resultadoNota.confiancaCampos,
+          imagemDigitalizadaBase64: resultadoNota.imagemComprimidaBase64,
+          statusProcessamento: "CONFERENCIA_SCANNER_OK",
+          divergencias: resultadoNota.divergencias,
+          areasCapturadas: resultadoNota.areasCapturadas || MAX_FAIXAS_CAPTURA
+        };
+
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({
+            tipo: "SPX_SCANNER_RESULTADO",
+            dados: payloadCompat
+          }, "*");
+          envioEmAndamento = false;
+          envioConcluido = true;
+          btnEnvio.textContent = "✓ ENVIO CONCLUÍDO";
+          statusEl.className = "alert-box alert-ok";
+          statusEl.textContent = "✅ Dados estruturados, imagem e PDF enviados para o Apps Script!";
+          statusEl.style.display = "block";
+          setTimeout(function() { window.close(); }, 650);
+          return;
+        }
+
+        const jsonCompacto = JSON.stringify({
+          numeroNota: payloadCompat.numeroNota,
+          fornecedor: payloadCompat.fornecedor,
+          chave: payloadCompat.chave,
+          valorTotal: payloadCompat.valorTotal,
+          itens: payloadCompat.itens,
+          confiancaOcr: payloadCompat.confiancaOcr
+        });
+        if (navigator.clipboard) {
+          try { await navigator.clipboard.writeText(jsonCompacto); } catch (e) {}
+        }
+        envioEmAndamento = false;
+        envioConcluido = true;
+        btnEnvio.textContent = "✓ ENVIO CONCLUÍDO";
+        statusEl.className = "alert-box alert-ok";
+        statusEl.textContent = "✅ Leitura copiada! Volte na aba do Apps Script e cole no campo de retorno alternativo.";
         statusEl.style.display = "block";
-        setTimeout(function() { window.close(); }, 650);
-        return;
+      } catch (err) {
+        envioEmAndamento = false;
+        btnEnvio.disabled = false;
+        btnEnvio.textContent = "🚀 TENTAR NOVAMENTE";
+        statusEl.className = "alert-box alert-err";
+        statusEl.textContent = "⚠️ Falha no envio: " + (err && err.message ? err.message : "erro inesperado");
+        statusEl.style.display = "block";
       }
-
-      const jsonCompacto = JSON.stringify({
-        numeroNota: payloadCompat.numeroNota,
-        fornecedor: payloadCompat.fornecedor,
-        chave: payloadCompat.chave,
-        valorTotal: payloadCompat.valorTotal,
-        itens: payloadCompat.itens,
-        confiancaOcr: payloadCompat.confiancaOcr
-      });
-      if (navigator.clipboard) {
-        try { await navigator.clipboard.writeText(jsonCompacto); } catch (e) {}
-      }
-      statusEl.textContent = "✅ Leitura copiada! Volte na aba do Apps Script e cole no campo de retorno alternativo.";
-      statusEl.style.display = "block";
     }
 
     function esc(s) {
