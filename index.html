@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SPX | Scanner Documental NF</title>
+  <title>SPX | Scanner de Nota Fiscal</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Arial, sans-serif; background: #F3F4F6; color: #111827; padding: 14px; }
@@ -38,22 +37,16 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>📷 SPX | Scanner Documental de Nota Fiscal</h1>
-      <p>Captura câmera/foto • Filtro scanner • Gera PDF • Envia para o sistema SPX no Apps Script</p>
+      <h1>📷 SPX | Scanner de Nota Fiscal</h1>
+      <p>Escaneia a nota, lê os dados/itens e envia para o Google Apps Script</p>
     </div>
 
     <div class="card">
-      <h2>1. URL do Sistema SPX (/exec)</h2>
-      <label>URL de implantação do Google Apps Script</label>
-      <input type="url" id="appsScriptUrl" placeholder="https://script.google.com/macros/s/SEU_ID/exec" />
-    </div>
-
-    <div class="card">
-      <h2>2. Captura e Efeito Scanner</h2>
-      <label>Usar câmera do celular ou escolher imagem</label>
+      <h2>1. Escanear Nota Física</h2>
+      <label>Usar câmera ou escolher foto da nota</label>
       <input type="file" id="fotoInput" accept="image/*" capture="environment" />
 
-      <label>Modo de escaneamento</label>
+      <label>Filtro de escaneamento</label>
       <select id="modoFiltro" onchange="aplicarFiltroScanner()">
         <option value="doc_nitido">Documento Nítido (Alto Contraste / PB)</option>
         <option value="cinza_limpo">Tons de Cinza Limpo</option>
@@ -61,11 +54,11 @@
       </select>
 
       <canvas id="scanCanvas"></canvas>
-      <button class="btn btn-dark" id="btnOcr" onclick="executarOcr()">🔍 Ler Texto e Itens (OCR)</button>
+      <button class="btn btn-dark" id="btnOcr" onclick="executarOcr()">🔍 Ler Informações e Itens (OCR)</button>
     </div>
 
     <div class="card">
-      <h2>3. Dados do Recebimento e Itens</h2>
+      <h2>2. Informações Lidas e Itens</h2>
       <div class="row">
         <div>
           <label>Nº da Nota Fiscal *</label>
@@ -91,7 +84,7 @@
         </div>
         <div>
           <label>Nome de Quem Recebeu *</label>
-          <input type="text" id="recebedor" placeholder="Nome do colaborador que recebeu" />
+          <input type="text" id="recebedor" placeholder="Nome de quem recebeu" />
         </div>
       </div>
 
@@ -101,21 +94,21 @@
           <input type="text" id="chaveNf" maxlength="44" placeholder="Opcional" />
         </div>
         <div>
-          <label>E-mail Principal Destinatário</label>
+          <label>E-mail Destinatário</label>
           <input type="email" id="emailDestino" value="jose.espiritosanto@shopee.com" />
         </div>
       </div>
 
-      <label>Adicionar item da nota</label>
+      <label>Adicionar item</label>
       <div class="row">
-        <input type="text" id="itemCod" placeholder="Código (ex.: 70.01.280)" />
+        <input type="text" id="itemCod" placeholder="Código (opcional)" />
         <input type="text" id="itemNome" placeholder="Produto / Descrição" />
       </div>
       <div class="row">
         <input type="number" id="itemQtd" placeholder="Qtd" value="1" step="0.01" />
         <input type="number" id="itemValor" placeholder="Vl. Unit. (R$)" value="0" step="0.01" />
       </div>
-      <button class="btn btn-gray" onclick="adicionarItemManual()">+ Adicionar Item na Lista</button>
+      <button class="btn btn-gray" onclick="adicionarItemManual()">+ Adicionar Item</button>
 
       <table>
         <thead>
@@ -123,25 +116,18 @@
         </thead>
         <tbody id="listaItensBody"></tbody>
       </table>
-    </div>
 
-    <div class="card">
-      <h2>4. Gerar PDF e Enviar para o Sistema SPX</h2>
-      <button class="btn btn-spx" id="btnEnviar" onclick="gerarPdfEEnviar()">🚀 Gerar PDF, Registrar e Disparar Report</button>
+      <button class="btn btn-spx" id="btnEnviar" onclick="enviarParaAppsScript()">🚀 Enviar Dados para o Apps Script</button>
       <div id="statusBox" class="status"></div>
     </div>
   </div>
 
   <script>
+    // Cole aqui a URL /exec do seu Web App do Google Apps Script
+    const APPS_SCRIPT_EXEC_URL = "COLE_AQUI_SUA_URL_EXEC";
+
     let imagemOriginal = null;
     let itensNota = [];
-
-    const urlSalva = localStorage.getItem("spx_nf_apps_script_url") || localStorage.getItem("nf_apps_script_url");
-    if (urlSalva) document.getElementById("appsScriptUrl").value = urlSalva;
-
-    document.getElementById("appsScriptUrl").addEventListener("change", function(e) {
-      localStorage.setItem("spx_nf_apps_script_url", e.target.value.trim());
-    });
 
     document.getElementById("fotoInput").addEventListener("change", function(e) {
       const file = e.target.files && e.target.files[0];
@@ -163,7 +149,7 @@
       const canvas = document.getElementById("scanCanvas");
       const ctx = canvas.getContext("2d");
       const modo = document.getElementById("modoFiltro").value;
-      const maxW = 1200;
+      const maxW = 900;
       const escala = imagemOriginal.width > maxW ? maxW / imagemOriginal.width : 1;
       canvas.width = Math.round(imagemOriginal.width * escala);
       canvas.height = Math.round(imagemOriginal.height * escala);
@@ -185,11 +171,11 @@
     }
 
     async function executarOcr() {
-      if (!imagemOriginal) return setStatus("err", "Selecione ou capture uma imagem primeiro.");
+      if (!imagemOriginal) return setStatus("err", "Selecione ou capture a imagem da nota primeiro.");
       const btn = document.getElementById("btnOcr");
       btn.disabled = true;
-      btn.textContent = "⏳ Lendo texto da nota...";
-      setStatus("info", "Executando OCR no documento escaneado...");
+      btn.textContent = "⏳ Lendo nota...";
+      setStatus("info", "Lendo informações da nota escaneada...");
 
       try {
         const canvas = document.getElementById("scanCanvas");
@@ -228,12 +214,12 @@
           }
         }
         renderizarItens();
-        setStatus("ok", "OCR concluído! Confira os campos e itens antes de enviar (" + adicionados + " sugestão(ões)).");
+        setStatus("ok", "Leitura concluída (" + adicionados + " item(ns) sugerido(s)). Confira e clique em Enviar.");
       } catch (e) {
-        setStatus("err", "Erro no OCR: " + e.message);
+        setStatus("err", "Erro ao ler nota: " + e.message);
       } finally {
         btn.disabled = false;
-        btn.textContent = "🔍 Ler Texto e Itens (OCR)";
+        btn.textContent = "🔍 Ler Informações e Itens (OCR)";
       }
     }
 
@@ -274,54 +260,22 @@
       ).join("");
     }
 
-    function gerarPdfBase64() {
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const numNota = document.getElementById("numeroNota").value.trim() || "S/N";
-      const fornecedor = document.getElementById("fornecedor").value.trim() || "Fornecedor não informado";
-      const categoria = document.getElementById("categoria").value;
-      const recebedor = document.getElementById("recebedor").value.trim() || "Equipe SPX";
-      const chave = document.getElementById("chaveNf").value.trim() || "-";
-
-      doc.setFontSize(14);
-      doc.text("SPX - Nota Fiscal Escaneada - NF " + numNota, 12, 14);
-      doc.setFontSize(10);
-      doc.text("Fornecedor: " + fornecedor + " | Categoria: " + categoria, 12, 21);
-      doc.text("Recebido por: " + recebedor + " | Chave: " + chave, 12, 27);
-
-      const canvas = document.getElementById("scanCanvas");
-      if (imagemOriginal) {
-        doc.addImage(canvas.toDataURL("image/jpeg", 0.9), "JPEG", 12, 32, 186, 130);
+    async function enviarParaAppsScript() {
+      if (!APPS_SCRIPT_EXEC_URL || !APPS_SCRIPT_EXEC_URL.includes("/exec")) {
+        return setStatus("err", "Configure a URL /exec na constante APPS_SCRIPT_EXEC_URL do index.html.");
       }
-
-      if (itensNota.length > 0) {
-        let y = 170;
-        doc.setFontSize(11);
-        doc.text("Itens:", 12, y);
-        y += 6;
-        doc.setFontSize(9);
-        itensNota.forEach((it) => {
-          if (y > 280) { doc.addPage(); y = 16; }
-          doc.text("- [" + it.codigo + "] " + it.produto + " | Qtd: " + it.quantidade + " | Total: R$ " + Number(it.valorTotal).toFixed(2), 12, y);
-          y += 5;
-        });
+      if (!imagemOriginal) {
+        return setStatus("err", "Escaneie ou selecione uma imagem da nota antes de enviar.");
       }
-
-      return doc.output("datauristring").split(",")[1];
-    }
-
-    async function gerarPdfEEnviar() {
-      const scriptUrl = document.getElementById("appsScriptUrl").value.trim();
-      if (!scriptUrl) return setStatus("err", "Cole a URL /exec do seu Google Apps Script.");
-      if (!imagemOriginal) return setStatus("err", "Capture ou selecione uma imagem da nota antes de enviar.");
 
       const btn = document.getElementById("btnEnviar");
       btn.disabled = true;
-      btn.textContent = "⏳ Gerando PDF e enviando...";
-      setStatus("info", "Gerando PDF e enviando para o sistema SPX...");
+      btn.textContent = "⏳ Enviando para o Apps Script...";
+      setStatus("info", "Enviando dados e imagem escaneada para o Google Apps Script...");
 
       try {
-        const pdfBase64 = gerarPdfBase64();
+        const canvas = document.getElementById("scanCanvas");
+        const imagemBase64 = canvas.toDataURL("image/jpeg", 0.65).split(",")[1];
         const numeroNota = document.getElementById("numeroNota").value.trim();
         const fornecedor = document.getElementById("fornecedor").value.trim();
         const categoria = document.getElementById("categoria").value;
@@ -330,7 +284,7 @@
         const email = document.getElementById("emailDestino").value.trim();
         const valorTotal = itensNota.reduce((acc, it) => acc + (Number(it.valorTotal) || 0), 0);
 
-        const resp = await fetch(scriptUrl, {
+        const resp = await fetch(APPS_SCRIPT_EXEC_URL, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
@@ -342,7 +296,7 @@
             email,
             valorTotal,
             itens: itensNota,
-            pdfBase64,
+            imagemBase64,
             enviarEmail: true
           }),
           redirect: "follow"
@@ -355,19 +309,24 @@
         if (jsonResp && jsonResp.sucesso) {
           setStatus(
             "ok",
-            "Sucesso! Nota registrada na linha " + jsonResp.linha +
+            "Enviado com sucesso! O Apps Script registrou na linha " + jsonResp.linha +
             "\nItens salvos: " + jsonResp.totalItens +
-            "\nReport enviado: " + (jsonResp.emailEnviado ? "Sim" : "Não") +
-            "\nPDF no Drive: " + jsonResp.pdfUrl
+            "\nE-mail enviado: " + (jsonResp.emailEnviado ? "Sim" : "Não") +
+            "\nPDF no Drive: " + (jsonResp.pdfUrl || "Gerado")
           );
         } else {
-          setStatus("err", "Falha ao processar:\n" + (jsonResp ? jsonResp.mensagem : textoResp.slice(0, 300)));
+          setStatus("err", "Falha no Apps Script:\n" + (jsonResp ? jsonResp.mensagem : textoResp.slice(0, 300)));
         }
       } catch (erro) {
-        setStatus("err", "Erro de conexão:\n" + erro.message);
+        setStatus(
+          "err",
+          "Erro de conexão (Failed to fetch).\n" +
+          "Confira no Apps Script: Implantar -> Gerenciar implantações -> Executar como: Eu e Quem pode acessar: Qualquer pessoa com o link.\n" +
+          "Detalhe: " + erro.message
+        );
       } finally {
         btn.disabled = false;
-        btn.textContent = "🚀 Gerar PDF, Registrar e Disparar Report";
+        btn.textContent = "🚀 Enviar Dados para o Apps Script";
       }
     }
 
@@ -384,4 +343,3 @@
   </script>
 </body>
 </html>
-    
