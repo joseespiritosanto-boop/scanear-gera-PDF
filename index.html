@@ -3,86 +3,105 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scanner Documental NF</title>
+  <title>SPX | Scanner Documental NF</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #f2f4f7; color: #1f2937; padding: 14px; }
-    .container { max-width: 720px; margin: 0 auto; }
-    .header { background: linear-gradient(135deg, #c0392b, #e74c3c); color: #fff; padding: 16px; border-radius: 10px; margin-bottom: 14px; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #F3F4F6; color: #111827; padding: 14px; }
+    .container { max-width: 740px; margin: 0 auto; }
+    .header { background: linear-gradient(90deg, #181C24 0%, #262C3A 55%, #EE4D2D 100%); color: #fff; padding: 16px; border-radius: 10px; margin-bottom: 14px; }
     .header h1 { font-size: 18px; margin-bottom: 4px; }
-    .header p { font-size: 12px; opacity: 0.92; }
-    .card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
-    .card h2 { font-size: 14px; margin-bottom: 10px; color: #111827; }
-    label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px; color: #374151; }
-    input, select { width: 100%; padding: 9px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; margin-bottom: 10px; }
+    .header p { font-size: 12px; opacity: 0.9; }
+    .card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); border: 1px solid #E5E7EB; }
+    .card h2 { font-size: 14px; margin-bottom: 10px; color: #181C24; }
+    label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; color: #374151; }
+    input, select { width: 100%; padding: 9px; border: 1px solid #D1D5DB; border-radius: 7px; font-size: 13px; margin-bottom: 10px; }
+    input:focus, select:focus { outline: none; border-color: #EE4D2D; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
-    canvas { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa; margin-top: 8px; }
-    .btn { width: 100%; padding: 11px; border: none; border-radius: 7px; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 6px; }
-    .btn-primary { background: #c0392b; color: #fff; }
-    .btn-secondary { background: #2563eb; color: #fff; }
-    .btn-gray { background: #4b5563; color: #fff; }
-    .btn:disabled { background: #9ca3af; cursor: not-allowed; }
+    canvas { width: 100%; border: 1px solid #E5E7EB; border-radius: 8px; background: #fafafa; margin-top: 8px; }
+    .btn { width: 100%; padding: 11px; border: none; border-radius: 7px; font-weight: 700; font-size: 13px; cursor: pointer; margin-top: 6px; }
+    .btn-spx { background: #EE4D2D; color: #fff; }
+    .btn-dark { background: #181C24; color: #fff; }
+    .btn-gray { background: #4B5563; color: #fff; }
+    .btn:disabled { background: #9CA3AF; cursor: not-allowed; }
     table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
-    th, td { border: 1px solid #e5e7eb; padding: 6px; text-align: left; }
-    th { background: #f9fafb; }
+    th, td { border: 1px solid #E5E7EB; padding: 6px; text-align: left; }
+    th { background: #F9FAFB; }
     .status { margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px; display: none; white-space: pre-line; }
-    .ok { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-    .err { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-    .info { background: #e0f2fe; color: #075985; border: 1px solid #7dd3fc; }
+    .ok { background: #DCFCE7; color: #166534; border: 1px solid #86EFAC; }
+    .err { background: #FEE2E2; color: #991B1B; border: 1px solid #FCA5A5; }
+    .info { background: #E0F2FE; color: #075985; border: 1px solid #7DD3FC; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>📄 Scanner de Nota Fiscal (Documento → PDF → Sheets)</h1>
-      <p>Escaneia a nota física, monta o PDF e envia para o Google Apps Script</p>
+      <h1>📷 SPX | Scanner Documental de Nota Fiscal</h1>
+      <p>Captura câmera/foto • Filtro scanner • Gera PDF • Envia para o sistema SPX no Apps Script</p>
     </div>
 
     <div class="card">
-      <h2>1. Configuração do Web App (Apps Script)</h2>
-      <label>URL de implantação (/exec)</label>
+      <h2>1. URL do Sistema SPX (/exec)</h2>
+      <label>URL de implantação do Google Apps Script</label>
       <input type="url" id="appsScriptUrl" placeholder="https://script.google.com/macros/s/SEU_ID/exec" />
     </div>
 
     <div class="card">
       <h2>2. Captura e Efeito Scanner</h2>
-      <label>Selecionar foto / usar câmera do celular</label>
+      <label>Usar câmera do celular ou escolher imagem</label>
       <input type="file" id="fotoInput" accept="image/*" capture="environment" />
 
       <label>Modo de escaneamento</label>
       <select id="modoFiltro" onchange="aplicarFiltroScanner()">
         <option value="doc_nitido">Documento Nítido (Alto Contraste / PB)</option>
         <option value="cinza_limpo">Tons de Cinza Limpo</option>
-        <option value="original">Original Corrigido</option>
+        <option value="original">Original</option>
       </select>
 
       <canvas id="scanCanvas"></canvas>
-      <button class="btn btn-secondary" id="btnOcr" onclick="executarOcr()">🔍 Ler Texto e Itens (OCR)</button>
+      <button class="btn btn-dark" id="btnOcr" onclick="executarOcr()">🔍 Ler Texto e Itens (OCR)</button>
     </div>
 
     <div class="card">
-      <h2>3. Dados da Nota e Itens</h2>
+      <h2>3. Dados do Recebimento e Itens</h2>
       <div class="row">
         <div>
-          <label>Nº da Nota</label>
+          <label>Nº da Nota Fiscal *</label>
           <input type="text" id="numeroNota" placeholder="Ex.: 819105" />
         </div>
         <div>
-          <label>Fornecedor / Emitente</label>
+          <label>Fornecedor / Emitente *</label>
           <input type="text" id="fornecedor" placeholder="Ex.: 1000 MARCAS SAFETY" />
         </div>
       </div>
 
       <div class="row">
         <div>
-          <label>Chave (44 dígitos - opcional)</label>
-          <input type="text" id="chaveNf" maxlength="44" placeholder="Opcional se não houver chave" />
+          <label>Categoria dos Itens *</label>
+          <select id="categoria">
+            <option value="EPI / Segurança">EPI / Segurança</option>
+            <option value="Insumos Operacionais">Insumos Operacionais</option>
+            <option value="Manutenção / Infraestrutura">Manutenção / Infraestrutura</option>
+            <option value="TI / Impressoras / Coletores">TI / Impressoras / Coletores</option>
+            <option value="Limpeza / Copa">Limpeza / Copa</option>
+            <option value="Outros">Outros</option>
+          </select>
         </div>
         <div>
-          <label>E-mail Destinatário (Coluna K)</label>
+          <label>Nome de Quem Recebeu *</label>
+          <input type="text" id="recebedor" placeholder="Nome do colaborador que recebeu" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Chave NF-e (44 dígitos - opcional)</label>
+          <input type="text" id="chaveNf" maxlength="44" placeholder="Opcional" />
+        </div>
+        <div>
+          <label>E-mail Principal Destinatário</label>
           <input type="email" id="emailDestino" value="jose.espiritosanto@shopee.com" />
         </div>
       </div>
@@ -100,22 +119,15 @@
 
       <table>
         <thead>
-          <tr>
-            <th>Cód</th>
-            <th>Produto</th>
-            <th>Qtd</th>
-            <th>Vl. Unit.</th>
-            <th>Total</th>
-            <th>Ação</th>
-          </tr>
+          <tr><th>Cód</th><th>Produto</th><th>Qtd</th><th>Vl. Unit.</th><th>Total</th><th>Ação</th></tr>
         </thead>
         <tbody id="listaItensBody"></tbody>
       </table>
     </div>
 
     <div class="card">
-      <h2>4. Gerar PDF e Enviar para Planilha + E-mail</h2>
-      <button class="btn btn-primary" id="btnEnviar" onclick="gerarPdfEEnviar()">🚀 Gerar PDF e Disparar Automação</button>
+      <h2>4. Gerar PDF e Enviar para o Sistema SPX</h2>
+      <button class="btn btn-spx" id="btnEnviar" onclick="gerarPdfEEnviar()">🚀 Gerar PDF, Registrar e Disparar Report</button>
       <div id="statusBox" class="status"></div>
     </div>
   </div>
@@ -124,17 +136,16 @@
     let imagemOriginal = null;
     let itensNota = [];
 
-    const urlSalva = localStorage.getItem("nf_apps_script_url");
+    const urlSalva = localStorage.getItem("spx_nf_apps_script_url") || localStorage.getItem("nf_apps_script_url");
     if (urlSalva) document.getElementById("appsScriptUrl").value = urlSalva;
 
     document.getElementById("appsScriptUrl").addEventListener("change", function(e) {
-      localStorage.setItem("nf_apps_script_url", e.target.value.trim());
+      localStorage.setItem("spx_nf_apps_script_url", e.target.value.trim());
     });
 
     document.getElementById("fotoInput").addEventListener("change", function(e) {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = function(ev) {
         const img = new Image();
@@ -152,19 +163,15 @@
       const canvas = document.getElementById("scanCanvas");
       const ctx = canvas.getContext("2d");
       const modo = document.getElementById("modoFiltro").value;
-
       const maxW = 1200;
       const escala = imagemOriginal.width > maxW ? maxW / imagemOriginal.width : 1;
       canvas.width = Math.round(imagemOriginal.width * escala);
       canvas.height = Math.round(imagemOriginal.height * escala);
-
       ctx.drawImage(imagemOriginal, 0, 0, canvas.width, canvas.height);
 
       if (modo === "original") return;
-
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imgData.data;
-
       for (let i = 0; i < data.length; i += 4) {
         let gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
         if (modo === "doc_nitido") {
@@ -174,15 +181,11 @@
         }
         data[i] = data[i + 1] = data[i + 2] = gray;
       }
-
       ctx.putImageData(imgData, 0, 0);
     }
 
     async function executarOcr() {
-      if (!imagemOriginal) {
-        setStatus("err", "Selecione ou capture uma imagem da nota antes de rodar o OCR.");
-        return;
-      }
+      if (!imagemOriginal) return setStatus("err", "Selecione ou capture uma imagem primeiro.");
       const btn = document.getElementById("btnOcr");
       btn.disabled = true;
       btn.textContent = "⏳ Lendo texto da nota...";
@@ -225,7 +228,7 @@
           }
         }
         renderizarItens();
-        setStatus("ok", "OCR concluído! Confira os campos e itens antes de enviar (" + adicionados + " sugestão(ões) adicionada(s)).");
+        setStatus("ok", "OCR concluído! Confira os campos e itens antes de enviar (" + adicionados + " sugestão(ões)).");
       } catch (e) {
         setStatus("err", "Erro no OCR: " + e.message);
       } finally {
@@ -239,11 +242,7 @@
       const nome = document.getElementById("itemNome").value.trim();
       const qtd = parseFloat(document.getElementById("itemQtd").value) || 1;
       const vUnit = parseFloat(document.getElementById("itemValor").value) || 0;
-
-      if (!nome) {
-        setStatus("err", "Informe o nome/descrição do item.");
-        return;
-      }
+      if (!nome) return setStatus("err", "Informe o nome/descrição do item.");
 
       itensNota.push({
         codigo: cod,
@@ -268,41 +267,31 @@
     }
 
     function renderizarItens() {
-      const tbody = document.getElementById("listaItensBody");
-      tbody.innerHTML = itensNota.map((it, idx) =>
-        "<tr>" +
-        "<td>" + escapar(it.codigo) + "</td>" +
-        "<td>" + escapar(it.produto) + "</td>" +
-        "<td>" + it.quantidade + "</td>" +
-        "<td>R$ " + Number(it.valorUnitario).toFixed(2) + "</td>" +
-        "<td>R$ " + Number(it.valorTotal).toFixed(2) + "</td>" +
-        "<td><button onclick='removerItem(" + idx + ")'>X</button></td>" +
-        "</tr>"
+      document.getElementById("listaItensBody").innerHTML = itensNota.map((it, idx) =>
+        "<tr><td>" + esc(it.codigo) + "</td><td>" + esc(it.produto) + "</td><td>" + it.quantidade +
+        "</td><td>R$ " + Number(it.valorUnitario).toFixed(2) + "</td><td>R$ " + Number(it.valorTotal).toFixed(2) +
+        "</td><td><button onclick='removerItem(" + idx + ")'>X</button></td></tr>"
       ).join("");
-    }
-
-    function escapar(str) {
-      return String(str || "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
     }
 
     function gerarPdfBase64() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
       const numNota = document.getElementById("numeroNota").value.trim() || "S/N";
       const fornecedor = document.getElementById("fornecedor").value.trim() || "Fornecedor não informado";
+      const categoria = document.getElementById("categoria").value;
+      const recebedor = document.getElementById("recebedor").value.trim() || "Equipe SPX";
       const chave = document.getElementById("chaveNf").value.trim() || "-";
 
       doc.setFontSize(14);
-      doc.text("Nota Fiscal Escaneada - NF " + numNota, 12, 14);
+      doc.text("SPX - Nota Fiscal Escaneada - NF " + numNota, 12, 14);
       doc.setFontSize(10);
-      doc.text("Fornecedor: " + fornecedor, 12, 21);
-      doc.text("Chave: " + chave, 12, 27);
+      doc.text("Fornecedor: " + fornecedor + " | Categoria: " + categoria, 12, 21);
+      doc.text("Recebido por: " + recebedor + " | Chave: " + chave, 12, 27);
 
       const canvas = document.getElementById("scanCanvas");
       if (imagemOriginal) {
-        const imgDataUrl = canvas.toDataURL("image/jpeg", 0.9);
-        doc.addImage(imgDataUrl, "JPEG", 12, 32, 186, 130);
+        doc.addImage(canvas.toDataURL("image/jpeg", 0.9), "JPEG", 12, 32, 186, 130);
       }
 
       if (itensNota.length > 0) {
@@ -312,61 +301,50 @@
         y += 6;
         doc.setFontSize(9);
         itensNota.forEach((it) => {
-          if (y > 280) {
-            doc.addPage();
-            y = 16;
-          }
-          doc.text(
-            "- [" + it.codigo + "] " + it.produto + " | Qtd: " + it.quantidade + " | Total: R$ " + Number(it.valorTotal).toFixed(2),
-            12,
-            y
-          );
+          if (y > 280) { doc.addPage(); y = 16; }
+          doc.text("- [" + it.codigo + "] " + it.produto + " | Qtd: " + it.quantidade + " | Total: R$ " + Number(it.valorTotal).toFixed(2), 12, y);
           y += 5;
         });
       }
 
-      const dataUri = doc.output("datauristring");
-      return dataUri.split(",")[1];
+      return doc.output("datauristring").split(",")[1];
     }
 
     async function gerarPdfEEnviar() {
       const scriptUrl = document.getElementById("appsScriptUrl").value.trim();
-      if (!scriptUrl) {
-        setStatus("err", "Cole a URL /exec do seu Google Apps Script.");
-        return;
-      }
-      if (!imagemOriginal) {
-        setStatus("err", "Capture ou selecione uma imagem da nota antes de enviar.");
-        return;
-      }
+      if (!scriptUrl) return setStatus("err", "Cole a URL /exec do seu Google Apps Script.");
+      if (!imagemOriginal) return setStatus("err", "Capture ou selecione uma imagem da nota antes de enviar.");
 
       const btn = document.getElementById("btnEnviar");
       btn.disabled = true;
       btn.textContent = "⏳ Gerando PDF e enviando...";
-      setStatus("info", "Gerando PDF da nota escaneada e enviando ao Google Apps Script...");
+      setStatus("info", "Gerando PDF e enviando para o sistema SPX...");
 
       try {
         const pdfBase64 = gerarPdfBase64();
         const numeroNota = document.getElementById("numeroNota").value.trim();
         const fornecedor = document.getElementById("fornecedor").value.trim();
+        const categoria = document.getElementById("categoria").value;
+        const recebedor = document.getElementById("recebedor").value.trim() || "Equipe SPX";
         const chave = document.getElementById("chaveNf").value.trim();
         const email = document.getElementById("emailDestino").value.trim();
         const valorTotal = itensNota.reduce((acc, it) => acc + (Number(it.valorTotal) || 0), 0);
 
-        const payload = {
-          chave: chave,
-          numeroNota: numeroNota,
-          fornecedor: fornecedor,
-          email: email,
-          valorTotal: valorTotal,
-          itens: itensNota,
-          pdfBase64: pdfBase64
-        };
-
         const resp = await fetch(scriptUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            chave,
+            numeroNota,
+            fornecedor,
+            categoria,
+            recebedor,
+            email,
+            valorTotal,
+            itens: itensNota,
+            pdfBase64,
+            enviarEmail: true
+          }),
           redirect: "follow"
         });
 
@@ -379,17 +357,17 @@
             "ok",
             "Sucesso! Nota registrada na linha " + jsonResp.linha +
             "\nItens salvos: " + jsonResp.totalItens +
-            "\nE-mail enviado: " + (jsonResp.emailEnviado ? "Sim" : "Não") +
+            "\nReport enviado: " + (jsonResp.emailEnviado ? "Sim" : "Não") +
             "\nPDF no Drive: " + jsonResp.pdfUrl
           );
         } else {
-          setStatus("err", "Falha ao processar no Apps Script:\n" + (jsonResp ? jsonResp.mensagem : textoResp.slice(0, 300)));
+          setStatus("err", "Falha ao processar:\n" + (jsonResp ? jsonResp.mensagem : textoResp.slice(0, 300)));
         }
       } catch (erro) {
-        setStatus("err", "Erro de conexão ao enviar para o Apps Script:\n" + erro.message);
+        setStatus("err", "Erro de conexão:\n" + erro.message);
       } finally {
         btn.disabled = false;
-        btn.textContent = "🚀 Gerar PDF e Disparar Automação";
+        btn.textContent = "🚀 Gerar PDF, Registrar e Disparar Report";
       }
     }
 
@@ -399,6 +377,11 @@
       box.textContent = msg;
       box.style.display = "block";
     }
+
+    function esc(s) {
+      return String(s || "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+    }
   </script>
 </body>
 </html>
+    
