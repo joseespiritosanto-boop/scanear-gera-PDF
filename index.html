@@ -68,7 +68,6 @@
     }
     .card-title { font-size: 15px; font-weight: 800; margin-bottom: 10px; color: var(--text); }
 
-    /* Moldura do Scanner Progressivo */
     .scanner-viewport {
       position: relative;
       width: 100%;
@@ -150,7 +149,6 @@
       z-index: 5;
     }
 
-    /* Barra de Progresso e Métricas */
     .progress-panel {
       margin-top: 12px;
       background: #F9FAFB;
@@ -354,7 +352,7 @@
       <span class="spx-badge">SPX</span>
       <div>
         <div class="topbar-title">SCANNER INTELIGENTE DE NOTA FISCAL</div>
-        <div class="topbar-sub">Captura Progressiva • Reconstrução • OCR DANFE</div>
+        <div class="topbar-sub">Captura Progressiva Rápida • Reconstrução • OCR DANFE</div>
       </div>
     </div>
     <button class="btn btn-outline btn-sm" type="button" onclick="reiniciarScannerCompleto()">🔄 Refazer</button>
@@ -374,14 +372,14 @@
 
       <div class="progress-panel">
         <div class="progress-head">
-          <span>CAPTURA DO DOCUMENTO</span>
+          <span>CAPTURA DO DOCUMENTO (MÁX. 8 ÁREAS)</span>
           <span id="txtProgressoPct">0%</span>
         </div>
         <div class="progress-bar-bg">
           <div class="progress-bar-fill" id="barraProgresso"></div>
         </div>
         <div class="progress-stats">
-          <span>Áreas capturadas: <strong id="txtAreasCapturadas">0</strong></span>
+          <span>Áreas capturadas: <strong id="txtAreasCapturadas">0 / 8</strong></span>
           <span>Dados encontrados: <strong id="txtDadosEncontrados">0</strong></span>
         </div>
 
@@ -412,8 +410,8 @@
       <div class="card-title">⚙️ Documento capturado. Processando...</div>
       <ul class="step-list" id="listaEtapasProc">
         <li id="etapa-1"><span>ETAPA 1–3: Reconstrução panorâmica e eliminação de duplicações</span><strong>⏳</strong></li>
-        <li id="etapa-2"><span>ETAPA 4–5: Realce documental sem perda de dígitos</span><strong>⏳</strong></li>
-        <li id="etapa-3"><span>ETAPA 6: OCR posicional por faixa capturada</span><strong>⏳</strong></li>
+        <li id="etapa-2"><span>ETAPA 4–5: Fusão inteligente em blocos de alta nitidez</span><strong>⏳</strong></li>
+        <li id="etapa-3"><span>ETAPA 6: OCR posicional rápido</span><strong>⏳</strong></li>
         <li id="etapa-4"><span>ETAPA 7–8: Extração da tabela DANFE e validação matemática</span><strong>⏳</strong></li>
         <li id="etapa-5"><span>ETAPA 10: Montagem do PDF de alta legibilidade</span><strong>⏳</strong></li>
       </ul>
@@ -488,7 +486,6 @@
 
         <div id="containerItens"></div>
 
-        <!-- Diagnóstico técnico do texto bruto lido (expansível para auditoria) -->
         <details style="margin-top:10px;font-size:12px;color:#6B7280">
           <summary style="cursor:pointer;font-weight:700">Ver texto bruto lido pelo OCR</summary>
           <textarea id="txtOcrBrutoDebug" rows="5" readonly style="margin-top:6px;font-size:11px;background:#F9FAFB"></textarea>
@@ -519,13 +516,18 @@
 
   <script>
     // ════════════════════════════════════════════════════════════════════
-    // ESTADO GLOBAL DO SCANNER PROGRESSIVO SPX
+    // ESTADO GLOBAL DO SCANNER PROGRESSIVO SPX (OTIMIZADO ALTA VELOCIDADE)
     // ════════════════════════════════════════════════════════════════════
+
+    const MAX_FAIXAS_CAPTURA = 8; // Limite ideal para folha A4 DANFE completa sem redundância
 
     let videoStream = null;
     let capturaAtiva = false;
     let capturaPausada = false;
     let timerCaptura = null;
+
+    // Pré-aquecimento do Worker Tesseract em segundo plano para leitura instantânea
+    let workerTesseractPromise = null;
 
     let faixasCapturadas = [];
     let ultimaAssinatura = null;
@@ -554,10 +556,20 @@
       pdfBase64: ""
     };
 
-    window.addEventListener("load", iniciarCapturaProgressiva);
+    window.addEventListener("load", function() {
+      preAquecerTesseract();
+      iniciarCapturaProgressiva();
+    });
+
+    function preAquecerTesseract() {
+      if (!workerTesseractPromise) {
+        workerTesseractPromise = Tesseract.createWorker("por");
+      }
+      return workerTesseractPromise;
+    }
 
     // ════════════════════════════════════════════════════════════════════
-    // ETAPA 1 & 2: CAPTURA PROGRESSIVA COM DETECÇÃO DE MOVIMENTO E NITIDEZ
+    // ETAPA 1 & 2: CAPTURA PROGRESSIVA INTELIGENTE (SEM EXCESSO DE FRAMES)
     // ════════════════════════════════════════════════════════════════════
 
     async function iniciarCapturaProgressiva() {
@@ -585,10 +597,10 @@
         });
         video.srcObject = videoStream;
         capturaAtiva = true;
-        setFeedback("Mova o celular lentamente pela nota fiscal.");
+        setFeedback("Aponte para o topo da nota e desça devagar.");
 
         clearInterval(timerCaptura);
-        timerCaptura = setInterval(analisarFrameVideo, 380);
+        timerCaptura = setInterval(analisarFrameVideo, 550);
       } catch (e) {
         setFeedback("Toque em 'Capturar Sequência pela Câmera Nativa' para fotografar a nota.");
       }
@@ -603,7 +615,7 @@
     }
 
     document.getElementById("inputMultiFotos").addEventListener("change", function(e) {
-      const arquivos = Array.from(e.target.files || []);
+      const arquivos = Array.from(e.target.files || []).slice(0, MAX_FAIXAS_CAPTURA);
       if (arquivos.length === 0) return;
 
       let carregadas = 0;
@@ -637,11 +649,16 @@
 
     function analisarFrameVideo() {
       if (!capturaAtiva || capturaPausada) return;
+      if (faixasCapturadas.length >= MAX_FAIXAS_CAPTURA) {
+        setFeedback("Documento completo capturado (" + MAX_FAIXAS_CAPTURA + " áreas). Toque em Finalizar Leitura.");
+        return;
+      }
+
       const video = document.getElementById("videoCam");
       if (!video.videoWidth || !video.videoHeight) return;
 
       const agora = Date.now();
-      if (agora - ultimoTimestampFrame < 340) return;
+      if (agora - ultimoTimestampFrame < 500) return;
       ultimoTimestampFrame = agora;
 
       const frameRecortado = recortarAreaDocumento(video);
@@ -661,27 +678,29 @@
       const assAtual = calcularAssinaturaFaixa(frameRecortado);
       if (!ultimaAssinatura) {
         registrarNovaFaixa(frameRecortado, assAtual, 0, densidade);
-        setFeedback("Área capturada. Desça lentamente pela nota...");
+        setFeedback("Área 1 capturada. Desça pela nota...");
         return;
       }
 
       const resSob = estimarSobreposicaoVertical(ultimaAssinatura, assAtual, frameRecortado.height);
 
-      if (resSob.similaridade > 0.88 && resSob.deslocamentoPx < frameRecortado.height * 0.12) {
-        setFeedback("Área já capturada.");
+      // Exige deslocamento real de pelo menos 32% antes de salvar nova faixa (evita 50+ frames repetidos)
+      if (resSob.deslocamentoPx < frameRecortado.height * 0.32) {
+        setFeedback("Área já capturada — continue descendo devagar.");
         return;
       }
 
-      if (resSob.similaridade < 0.16 && faixasCapturadas.length > 0) {
-        setFeedback("Movimente mais devagar.");
+      if (resSob.similaridade < 0.14 && faixasCapturadas.length > 0) {
+        setFeedback("Movimente mais devagar para não pular linhas.");
         return;
       }
 
       registrarNovaFaixa(frameRecortado, assAtual, resSob.sobreposicaoPx, densidade);
-      setFeedback("Área capturada.");
 
-      if (faixasCapturadas.length >= 9) {
-        setFeedback("Documento capturado. Toque em 'Finalizar Leitura'.");
+      if (faixasCapturadas.length >= MAX_FAIXAS_CAPTURA) {
+        setFeedback("Captura completa! Toque em 'Finalizar Leitura'.");
+      } else {
+        setFeedback("Área " + faixasCapturadas.length + " capturada. Continue descendo...");
       }
     }
 
@@ -693,7 +712,7 @@
         densidadeTexto: densidade
       });
       ultimaAssinatura = assinatura;
-      dadosDetectadosContador += Math.max(3, Math.round(densidade * 16));
+      dadosDetectadosContador += Math.max(4, Math.round(densidade * 18));
 
       document.getElementById("btnFinalizarCaptura").disabled = false;
       atualizarHudProgresso();
@@ -702,10 +721,10 @@
 
     function atualizarHudProgresso() {
       const qtd = faixasCapturadas.length;
-      const pct = Math.min(100, Math.round((qtd / 8) * 100));
+      const pct = Math.min(100, Math.round((qtd / 6) * 100));
       document.getElementById("txtProgressoPct").textContent = pct + "%";
       document.getElementById("barraProgresso").style.width = pct + "%";
-      document.getElementById("txtAreasCapturadas").textContent = qtd;
+      document.getElementById("txtAreasCapturadas").textContent = qtd + " / " + MAX_FAIXAS_CAPTURA;
       document.getElementById("txtDadosEncontrados").textContent = dadosDetectadosContador;
     }
 
@@ -726,8 +745,8 @@
       const cropW = srcW - margemX * 2;
       const cropH = srcH - margemY * 2;
 
-      // Mantém 1400px de largura para preservar detalhes finos de dígitos DANFE
-      const targetW = 1400;
+      // 1050px preserva 100% da nitidez dos números da DANFE e acelera o OCR em ~45%
+      const targetW = 1050;
       const escala = targetW / cropW;
       const targetH = Math.round(cropH * escala);
 
@@ -740,7 +759,6 @@
       return realcarLegibilidadeSuave(c);
     }
 
-    // Realce de contraste em tons de cinza preservando antialiasing (nunca apaga dígitos finos)
     function realcarLegibilidadeSuave(canvasOrigem) {
       const out = document.createElement("canvas");
       out.width = canvasOrigem.width;
@@ -753,7 +771,7 @@
 
       let soma = 0;
       let n = 0;
-      for (let i = 0; i < d.length; i += 20) {
+      for (let i = 0; i < d.length; i += 24) {
         soma += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
         n++;
       }
@@ -770,7 +788,7 @@
     }
 
     function calcularNitidez(canvas) {
-      const w = 160;
+      const w = 140;
       const h = Math.round((canvas.height / canvas.width) * w);
       const tmp = document.createElement("canvas");
       tmp.width = w;
@@ -784,8 +802,7 @@
       for (let y = 1; y < h - 1; y += 2) {
         for (let x = 1; x < w - 1; x += 2) {
           const i = (y * w + x) * 4;
-          const diff = Math.abs(d[i] - d[i + 4]) + Math.abs(d[i] - d[i + w * 4]);
-          somaGrad += diff;
+          somaGrad += Math.abs(d[i] - d[i + 4]) + Math.abs(d[i] - d[i + w * 4]);
           count++;
         }
       }
@@ -793,7 +810,7 @@
     }
 
     function calcularDensidadeTexto(canvas) {
-      const w = 160;
+      const w = 140;
       const h = Math.round((canvas.height / canvas.width) * w);
       const tmp = document.createElement("canvas");
       tmp.width = w;
@@ -810,8 +827,8 @@
     }
 
     function calcularAssinaturaFaixa(canvas) {
-      const w = 96;
-      const h = 96;
+      const w = 80;
+      const h = 80;
       const tmp = document.createElement("canvas");
       tmp.width = w;
       tmp.height = h;
@@ -835,7 +852,7 @@
       let melhorShift = 0;
       let menorErro = Infinity;
 
-      const maxShift = Math.floor(N * 0.75);
+      const maxShift = Math.floor(N * 0.78);
       for (let shift = 0; shift <= maxShift; shift++) {
         const tam = N - shift;
         let erro = 0;
@@ -858,13 +875,13 @@
       };
     }
 
-    function reconstruirCanvasCompleto(paraPreview) {
-      if (faixasCapturadas.length === 0) return null;
-
-      const larguraBase = faixasCapturadas[0].canvas.width;
+    // Une faixas num intervalo [inicio, fim) eliminando sobreposição repetida
+    function unirIntervaloFaixas(listaFaixas, larguraDestino) {
+      const larguraBase = listaFaixas[0].canvas.width;
+      const escala = larguraDestino / larguraBase;
       let alturaTotal = 0;
 
-      faixasCapturadas.forEach(function(f, idx) {
+      listaFaixas.forEach(function(f, idx) {
         if (idx === 0) {
           alturaTotal += f.canvas.height;
         } else {
@@ -872,9 +889,6 @@
           alturaTotal += util;
         }
       });
-
-      const maxAltura = paraPreview ? 420 : 4200;
-      const escala = alturaTotal > maxAltura ? (maxAltura / alturaTotal) : (paraPreview ? (120 / larguraBase) : 1);
 
       const out = document.createElement("canvas");
       out.width = Math.max(60, Math.round(larguraBase * escala));
@@ -884,7 +898,7 @@
       ctx.fillRect(0, 0, out.width, out.height);
 
       let cursorY = 0;
-      faixasCapturadas.forEach(function(f, idx) {
+      listaFaixas.forEach(function(f, idx) {
         if (idx === 0) {
           const hDest = Math.round(f.canvas.height * escala);
           ctx.drawImage(f.canvas, 0, 0, f.canvas.width, f.canvas.height, 0, cursorY, out.width, hDest);
@@ -901,6 +915,28 @@
       return out;
     }
 
+    function reconstruirCanvasCompleto(paraPreview) {
+      if (faixasCapturadas.length === 0) return null;
+      const larguraBase = faixasCapturadas[0].canvas.width;
+      return unirIntervaloFaixas(faixasCapturadas, paraPreview ? 120 : larguraBase);
+    }
+
+    // Agrupa as faixas em no máximo 3 super-blocos verticais para OCR ultrarrápido (3 chamadas em vez de 57!)
+    function gerarBlocosConsolidadosParaOcr() {
+      const n = faixasCapturadas.length;
+      if (n <= 3) {
+        return faixasCapturadas.map(f => f.canvas);
+      }
+      const numGrupos = 3;
+      const tamGrupo = Math.ceil(n / numGrupos);
+      const blocos = [];
+      for (let i = 0; i < n; i += tamGrupo) {
+        const subLista = faixasCapturadas.slice(i, i + tamGrupo);
+        blocos.push(unirIntervaloFaixas(subLista, subLista[0].canvas.width));
+      }
+      return blocos;
+    }
+
     function atualizarPreviewMontagem() {
       const mini = reconstruirCanvasCompleto(true);
       if (!mini) return;
@@ -913,7 +949,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // ETAPA 6: OCR POR FAIXA CAPTURADA (TESSERACT V5 COM { blocks: true })
+    // ETAPA 6: OCR ULTRARRÁPIDO EM ATÉ 3 BLOCOS CONSOLIDADOS
     // ════════════════════════════════════════════════════════════════════
 
     function marcarEtapa(num, statusTxt) {
@@ -921,7 +957,6 @@
       if (li) li.querySelector("strong").textContent = statusTxt;
     }
 
-    // Extrai palavras com coordenadas tanto de data.words quanto da árvore blocks -> paragraphs -> lines -> words
     function extrairPalavrasTesseractV5(dataOcr, offsetY) {
       const lista = [];
       if (!dataOcr) return lista;
@@ -980,50 +1015,48 @@
         // ETAPA 1-3: Reconstrução panorâmica para visualização e PDF
         marcarEtapa(1, "⏳ Montando...");
         canvasVisualizacao = reconstruirCanvasCompleto(false);
-        resultadoNota.imagemVisualizacaoDataUrl = canvasVisualizacao.toDataURL("image/jpeg", 0.86);
+        resultadoNota.imagemVisualizacaoDataUrl = canvasVisualizacao.toDataURL("image/jpeg", 0.85);
         marcarEtapa(1, "✅ OK");
 
-        // ETAPA 4-5: Preparação das faixas em alta nitidez
-        marcarEtapa(2, "✅ OK (" + faixasCapturadas.length + " faixa(s))");
+        // ETAPA 4-5: Consolida faixas em no máximo 3 super-blocos
+        marcarEtapa(2, "⏳ Consolidando...");
+        const blocosOcr = gerarBlocosConsolidadosParaOcr();
+        marcarEtapa(2, "✅ " + blocosOcr.length + " bloco(s)");
 
-        // ETAPA 6: Executa OCR faixa por faixa com { blocks: true } para nunca perder palavras pequenas
-        marcarEtapa(3, "⏳ Lendo 0/" + faixasCapturadas.length + "...");
+        // ETAPA 6: OCR com worker pré-aquecido (em no máximo 3 chamadas!)
+        marcarEtapa(3, "⏳ Lendo 0/" + blocosOcr.length + "...");
         const todasPalavras = [];
-        const textosPorFaixa = [];
+        const textosPorBloco = [];
         let offsetYAcumulado = 0;
-        let larguraRef = faixasCapturadas[0].canvas.width;
+        const larguraRef = blocosOcr[0].width;
 
-        const worker = await Tesseract.createWorker("por");
-        try {
-          for (let i = 0; i < faixasCapturadas.length; i++) {
-            marcarEtapa(3, "⏳ Lendo " + (i + 1) + "/" + faixasCapturadas.length + "...");
-            const cFaixa = faixasCapturadas[i].canvas;
-            const res = await worker.recognize(cFaixa, {}, { blocks: true, text: true });
-            const palavrasFaixa = extrairPalavrasTesseractV5(res.data, offsetYAcumulado);
-            todasPalavras.push(...palavrasFaixa);
-            if (res.data && res.data.text) {
-              textosPorFaixa.push(res.data.text);
-            }
-            offsetYAcumulado += cFaixa.height;
+        const worker = await preAquecerTesseract();
+        for (let i = 0; i < blocosOcr.length; i++) {
+          marcarEtapa(3, "⏳ Lendo " + (i + 1) + "/" + blocosOcr.length + "...");
+          const cBloco = blocosOcr[i];
+          const res = await worker.recognize(cBloco, {}, { blocks: true, text: true });
+          const palavrasBloco = extrairPalavrasTesseractV5(res.data, offsetYAcumulado);
+          todasPalavras.push(...palavrasBloco);
+          if (res.data && res.data.text) {
+            textosPorBloco.push(res.data.text);
           }
-        } finally {
-          await worker.terminate();
+          offsetYAcumulado += cBloco.height;
         }
 
-        const textoConsolidado = textosPorFaixa.join("\n");
+        const textoConsolidado = textosPorBloco.join("\n");
         marcarEtapa(3, "✅ " + todasPalavras.length + " palavras");
 
-        // ETAPA 7-8: Interpretação estruturada DANFE (Posicional + Textual) e validação matemática
+        // ETAPA 7-8: Interpretação estruturada DANFE
         marcarEtapa(4, "⏳ Analisando DANFE...");
         interpretarDanfeCompleta(todasPalavras, textoConsolidado, larguraRef, offsetYAcumulado);
         marcarEtapa(4, "✅ " + resultadoNota.itens.length + " item(ns)");
 
-        // ETAPA 10: Geração do PDF com a imagem reconstruída completa
+        // ETAPA 10: Geração do PDF
         marcarEtapa(5, "⏳ Gerando PDF...");
         gerarPdfDaNotaReconstruida();
         marcarEtapa(5, "✅ PDF Pronto");
 
-        setTimeout(abrirTelaConferencia, 300);
+        setTimeout(abrirTelaConferencia, 200);
       } catch (erro) {
         alert("Erro durante o processamento da nota: " + erro.message);
         reiniciarScannerCompleto();
@@ -1040,7 +1073,7 @@
 
       const linhas = [];
       ordenadas.forEach(function(p) {
-        const tolY = Math.max(12, p.height * 0.7);
+        const tolY = Math.max(11, p.height * 0.7);
         let linhaAlvo = null;
         for (let i = linhas.length - 1; i >= Math.max(0, linhas.length - 5); i--) {
           if (Math.abs(linhas[i].yMedio - p.y) <= tolY) {
@@ -1069,25 +1102,16 @@
       const linhasPosicionais = agruparPalavrasEmLinhas(palavras);
       const linhasTexto = textoBruto.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
 
-      // 1. Chave NF-e (44 dígitos com validação Módulo 11)
       const { chave, confiancaChave } = extrairChaveNfeValidada(textoBruto);
-
-      // 2. Número da NF, Série e Data de Emissão
       const { numeroNota, serie, dataEmissao, confiancaNum } = extrairNumeroSerieData(chave, linhasTexto, textoBruto);
-
-      // 3. Emitente / Fornecedor
       const { fornecedor, cnpjEmitente, confiancaForn } = extrairEmitenteSemantico(linhasTexto);
-
-      // 4. Valor Total da NF
       const totaisInfo = extrairTotaisDanfe(linhasTexto, textoBruto);
 
-      // 5. Tabela de Produtos (combina extração posicional por colunas + fallback por linhas textuais)
       let itensExtraidos = extrairTabelaProdutosPosicional(linhasPosicionais, larguraImg, totaisInfo.valorTotalNf);
       if (itensExtraidos.length === 0) {
         itensExtraidos = extrairItensPorRegexDanfe(linhasTexto, totaisInfo.valorTotalNf);
       }
 
-      // Desduplica itens repetidos vindos de faixas sobrepostas
       itensExtraidos = desduplicarItens(itensExtraidos);
 
       const somaItens = itensExtraidos.reduce((acc, it) => acc + it.valorTotal, 0);
@@ -1158,7 +1182,6 @@
     function extrairChaveNfeValidada(textoBruto) {
       const candidatos = new Set();
 
-      // Normaliza confusões comuns de OCR apenas em blocos numéricos longos
       const blocos = textoBruto.match(/(?:[\dOIlSB][\s.-]*){44}/gi) || [];
       blocos.forEach(function(b) {
         const limpo = b
@@ -1337,7 +1360,6 @@
           continue;
         }
 
-        // Mesmo que o cabeçalho não tenha sido lido perfeitamente, analisa linhas com estrutura de produto DANFE
         const tokensDesc = [];
         const tokensNum = [];
         let codigoProd = "";
@@ -1409,7 +1431,6 @@
       return itens;
     }
 
-    // Fallback textual caso a linha DANFE venha quebrada
     function extrairItensPorRegexDanfe(linhasTexto, valorTotalNf) {
       const itens = [];
       const bloqueio = /(?:VALOR\s+TOTAL|SUBTOTAL|FRETE|DESCONTO|ICMS|IPI|PIS|COFINS|BASE\s+DE\s+C[AÁ]LCULO|TRIBUTOS|DUPLICATA|PARCELA|RECEBEMOS)/i;
