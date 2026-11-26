@@ -187,7 +187,6 @@
     }
     .progress-stats strong { color: var(--text); }
 
-    /* Mini-preview da montagem progressiva */
     .stitch-strip-wrap {
       margin-top: 10px;
       display: flex;
@@ -208,7 +207,6 @@
       flex-shrink: 0;
     }
 
-    /* Botões */
     .btn {
       width: 100%;
       padding: 13px 14px;
@@ -234,7 +232,6 @@
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     @media (max-width: 440px) { .grid-2 { grid-template-columns: 1fr; } }
 
-    /* Etapas de Processamento */
     .step-list { list-style: none; font-size: 12px; }
     .step-list li {
       padding: 7px 10px;
@@ -245,9 +242,8 @@
     }
     .step-list li:last-child { border-bottom: none; }
 
-    /* Campos de Conferência */
     label { display: block; font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 4px; }
-    input, select {
+    input, select, textarea {
       width: 100%;
       padding: 11px;
       border: 1.5px solid #D1D5DB;
@@ -257,7 +253,7 @@
       background: #FFFFFF;
       margin-bottom: 10px;
     }
-    input:focus, select:focus { outline: none; border-color: var(--spx-orange); }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--spx-orange); }
 
     .conf-meter {
       display: flex;
@@ -279,7 +275,6 @@
     }
     .conf-bar > i { display: block; height: 100%; background: var(--spx-orange); }
 
-    /* Card de Item na Conferência */
     .item-card {
       border: 1.5px solid var(--border);
       border-radius: 10px;
@@ -330,7 +325,6 @@
     .alert-err { background: var(--err-bg); color: var(--err-text); border: 1px solid #FCA5A5; }
     .alert-ok { background: var(--ok-bg); color: var(--ok-text); border: 1px solid #86EFAC; }
 
-    /* Modal Visualizar Documento Digitalizado */
     .modal-bg {
       position: fixed;
       inset: 0;
@@ -407,7 +401,6 @@
         </button>
       </div>
 
-      <!-- Modo alternativo caso câmera ao vivo seja bloqueada pelo navegador -->
       <input type="file" id="inputMultiFotos" accept="image/*" capture="environment" multiple style="display:none" />
       <button class="btn btn-outline" type="button" onclick="document.getElementById('inputMultiFotos').click()">
         📱 Capturar Sequência pela Câmera Nativa
@@ -418,10 +411,10 @@
     <section id="secProcessamento" class="card" style="display:none">
       <div class="card-title">⚙️ Documento capturado. Processando...</div>
       <ul class="step-list" id="listaEtapasProc">
-        <li id="etapa-1"><span>ETAPA 1–3: Reconstrução e eliminação de duplicações</span><strong>⏳</strong></li>
-        <li id="etapa-2"><span>ETAPA 4–5: Recorte documental, contraste e nitidez</span><strong>⏳</strong></li>
-        <li id="etapa-3"><span>ETAPA 6: OCR posicional por regiões (Cabeçalho, Produtos, Totais)</span><strong>⏳</strong></li>
-        <li id="etapa-4"><span>ETAPA 7–8: Reconstrução da tabela DANFE e validação matemática</span><strong>⏳</strong></li>
+        <li id="etapa-1"><span>ETAPA 1–3: Reconstrução panorâmica e eliminação de duplicações</span><strong>⏳</strong></li>
+        <li id="etapa-2"><span>ETAPA 4–5: Realce documental sem perda de dígitos</span><strong>⏳</strong></li>
+        <li id="etapa-3"><span>ETAPA 6: OCR posicional por faixa capturada</span><strong>⏳</strong></li>
+        <li id="etapa-4"><span>ETAPA 7–8: Extração da tabela DANFE e validação matemática</span><strong>⏳</strong></li>
         <li id="etapa-5"><span>ETAPA 10: Montagem do PDF de alta legibilidade</span><strong>⏳</strong></li>
       </ul>
     </section>
@@ -434,7 +427,7 @@
 
       <!-- Documento Digitalizado -->
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
           <div>
             <div class="card-title" style="margin-bottom:2px">DOCUMENTO DIGITALIZADO</div>
             <div style="font-size:12px;color:#6B7280" id="txtResumoAreas">Reconstruído a partir de 0 áreas capturadas</div>
@@ -454,7 +447,7 @@
           <span>Número da NF *</span>
           <span>Confiança <strong id="confPctNum">0%</strong><span class="conf-bar"><i id="confBarNum" style="width:0%"></i></span></span>
         </div>
-        <input type="text" id="editNumNota" placeholder="Ex.: 223910001" oninput="validarEstadoConferencia()" />
+        <input type="text" id="editNumNota" placeholder="Ex.: 819105" oninput="validarEstadoConferencia()" />
 
         <div class="conf-meter">
           <span>Fornecedor / Emitente *</span>
@@ -494,6 +487,12 @@
         </div>
 
         <div id="containerItens"></div>
+
+        <!-- Diagnóstico técnico do texto bruto lido (expansível para auditoria) -->
+        <details style="margin-top:10px;font-size:12px;color:#6B7280">
+          <summary style="cursor:pointer;font-weight:700">Ver texto bruto lido pelo OCR</summary>
+          <textarea id="txtOcrBrutoDebug" rows="5" readonly style="margin-top:6px;font-size:11px;background:#F9FAFB"></textarea>
+        </details>
       </div>
 
       <!-- Confirmação de Envio para o Apps Script -->
@@ -528,17 +527,13 @@
     let capturaPausada = false;
     let timerCaptura = null;
 
-    // Armazena as faixas capturadas progressivamente (sem duplicação)
-    let faixasCapturadas = []; // { canvas, assinatura, alturaUtil, densidadeTexto }
+    let faixasCapturadas = [];
     let ultimaAssinatura = null;
     let ultimoTimestampFrame = 0;
     let dadosDetectadosContador = 0;
 
-    // Canvases em 3 níveis de qualidade (OCR Alta Resolução, Visualização, Envio)
-    let canvasOcrAltaRes = document.createElement("canvas");
     let canvasVisualizacao = document.createElement("canvas");
 
-    // Resultado estruturado
     let resultadoNota = {
       numeroNota: "",
       serie: "",
@@ -548,12 +543,12 @@
       destinatario: "",
       chave: "",
       valorTotal: 0,
-      totaisDetalhados: {},
       itens: [],
+      textoBrutoCompleto: "",
+      totalPalavrasLidas: 0,
       confiancaOcr: 0,
       confiancaCampos: { numeroNota: 0, fornecedor: 0, chave: 0, valorTotal: 0 },
       divergencias: [],
-      imagemAltaResDataUrl: "",
       imagemVisualizacaoDataUrl: "",
       imagemComprimidaBase64: "",
       pdfBase64: ""
@@ -593,7 +588,7 @@
         setFeedback("Mova o celular lentamente pela nota fiscal.");
 
         clearInterval(timerCaptura);
-        timerCaptura = setInterval(analisarFrameVideo, 360);
+        timerCaptura = setInterval(analisarFrameVideo, 380);
       } catch (e) {
         setFeedback("Toque em 'Capturar Sequência pela Câmera Nativa' para fotografar a nota.");
       }
@@ -607,7 +602,6 @@
       document.getElementById("scanLaser").style.display = capturaPausada ? "none" : "block";
     }
 
-    // Fallback para sequência de fotos pela câmera nativa do celular
     document.getElementById("inputMultiFotos").addEventListener("change", function(e) {
       const arquivos = Array.from(e.target.files || []);
       if (arquivos.length === 0) return;
@@ -626,7 +620,7 @@
               sobreposicaoPx: faixasCapturadas.length === 0 ? 0 : Math.round(c.height * 0.22),
               densidadeTexto: calcularDensidadeTexto(c)
             });
-            dadosDetectadosContador += Math.max(3, Math.round(faixasCapturadas[faixasCapturadas.length - 1].densidadeTexto * 12));
+            dadosDetectadosContador += Math.max(4, Math.round(faixasCapturadas[faixasCapturadas.length - 1].densidadeTexto * 15));
             carregadas++;
             if (carregadas === arquivos.length) {
               atualizarPreviewMontagem();
@@ -647,27 +641,23 @@
       if (!video.videoWidth || !video.videoHeight) return;
 
       const agora = Date.now();
-      if (agora - ultimoTimestampFrame < 320) return;
+      if (agora - ultimoTimestampFrame < 340) return;
       ultimoTimestampFrame = agora;
 
-      // 1. Extrai região central da moldura e recorta fundo da mesa
       const frameRecortado = recortarAreaDocumento(video);
 
-      // 2. Avalia nitidez (rejeita frames tremidos)
       const nitidez = calcularNitidez(frameRecortado);
-      if (nitidez < 14) {
+      if (nitidez < 12) {
         setFeedback("Segure o celular por um instante.");
         return;
       }
 
-      // 3. Avalia se há texto/tabela útil no frame
       const densidade = calcularDensidadeTexto(frameRecortado);
-      if (densidade < 0.04) {
+      if (densidade < 0.03) {
         setFeedback("Aponte a moldura sobre a nota fiscal.");
         return;
       }
 
-      // 4. Compara com a última faixa capturada para detectar movimento, velocidade e sobreposição
       const assAtual = calcularAssinaturaFaixa(frameRecortado);
       if (!ultimaAssinatura) {
         registrarNovaFaixa(frameRecortado, assAtual, 0, densidade);
@@ -675,27 +665,23 @@
         return;
       }
 
-      const resultadoSobreposicao = estimarSobreposicaoVertical(ultimaAssinatura, assAtual, frameRecortado.height);
+      const resSob = estimarSobreposicaoVertical(ultimaAssinatura, assAtual, frameRecortado.height);
 
-      // Se quase não houve movimento (sobreposição > 88%)
-      if (resultadoSobreposicao.similaridade > 0.88 && resultadoSobreposicao.deslocamentoPx < frameRecortado.height * 0.12) {
+      if (resSob.similaridade > 0.88 && resSob.deslocamentoPx < frameRecortado.height * 0.12) {
         setFeedback("Área já capturada.");
         return;
       }
 
-      // Se o usuário moveu rápido demais e perdeu sobreposição útil
-      if (resultadoSobreposicao.similaridade < 0.18 && faixasCapturadas.length > 0) {
+      if (resSob.similaridade < 0.16 && faixasCapturadas.length > 0) {
         setFeedback("Movimente mais devagar.");
         return;
       }
 
-      // Nova área válida com sobreposição controlada!
-      registrarNovaFaixa(frameRecortado, assAtual, resultadoSobreposicao.sobreposicaoPx, densidade);
+      registrarNovaFaixa(frameRecortado, assAtual, resSob.sobreposicaoPx, densidade);
       setFeedback("Área capturada.");
 
-      // Se já percorreu extensão típica de uma DANFE (ex.: 9+ faixas), sinaliza conclusão sugerida
-      if (faixasCapturadas.length >= 10) {
-        setFeedback("Documento capturado. Toque em 'Finalizar Leitura' ou continue se faltar o rodapé.");
+      if (faixasCapturadas.length >= 9) {
+        setFeedback("Documento capturado. Toque em 'Finalizar Leitura'.");
       }
     }
 
@@ -707,7 +693,7 @@
         densidadeTexto: densidade
       });
       ultimaAssinatura = assinatura;
-      dadosDetectadosContador += Math.max(2, Math.round(densidade * 15));
+      dadosDetectadosContador += Math.max(3, Math.round(densidade * 16));
 
       document.getElementById("btnFinalizarCaptura").disabled = false;
       atualizarHudProgresso();
@@ -728,21 +714,20 @@
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // VISÃO COMPUTACIONAL LEVE: RECORTE, NITIDEZ, ASSINATURA E SOBREPOSIÇÃO
+    // VISÃO COMPUTACIONAL: RECORTE, NITIDEZ E ASSINATURA DE SOBREPOSIÇÃO
     // ════════════════════════════════════════════════════════════════════
 
     function recortarAreaDocumento(origem) {
       const srcW = origem.videoWidth || origem.width;
       const srcH = origem.videoHeight || origem.height;
 
-      // Recorta a janela útil da moldura (elimina bordas externas da mesa)
-      const margemX = Math.round(srcW * 0.06);
-      const margemY = Math.round(srcH * 0.08);
+      const margemX = Math.round(srcW * 0.04);
+      const margemY = Math.round(srcH * 0.06);
       const cropW = srcW - margemX * 2;
       const cropH = srcH - margemY * 2;
 
-      // Normaliza largura para 1200px mantendo alta definição para OCR
-      const targetW = 1200;
+      // Mantém 1400px de largura para preservar detalhes finos de dígitos DANFE
+      const targetW = 1400;
       const escala = targetW / cropW;
       const targetH = Math.round(cropH * escala);
 
@@ -752,8 +737,36 @@
       const ctx = c.getContext("2d");
       ctx.drawImage(origem, margemX, margemY, cropW, cropH, 0, 0, targetW, targetH);
 
-      // Ajuste fino de contraste e remoção de fundo escuro da mesa nas laterais
-      return ajustarContrasteDocumento(c, false);
+      return realcarLegibilidadeSuave(c);
+    }
+
+    // Realce de contraste em tons de cinza preservando antialiasing (nunca apaga dígitos finos)
+    function realcarLegibilidadeSuave(canvasOrigem) {
+      const out = document.createElement("canvas");
+      out.width = canvasOrigem.width;
+      out.height = canvasOrigem.height;
+      const ctx = out.getContext("2d");
+      ctx.drawImage(canvasOrigem, 0, 0);
+
+      const imgData = ctx.getImageData(0, 0, out.width, out.height);
+      const d = imgData.data;
+
+      let soma = 0;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 20) {
+        soma += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        n++;
+      }
+      const media = n ? (soma / n) : 150;
+
+      for (let i = 0; i < d.length; i += 4) {
+        const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        const ajustado = Math.min(255, Math.max(0, (lum - media) * 1.38 + 165));
+        d[i] = d[i + 1] = d[i + 2] = ajustado;
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+      return out;
     }
 
     function calcularNitidez(canvas) {
@@ -771,10 +784,7 @@
       for (let y = 1; y < h - 1; y += 2) {
         for (let x = 1; x < w - 1; x += 2) {
           const i = (y * w + x) * 4;
-          const c = d[i];
-          const r = d[i + 4];
-          const b = d[i + w * 4];
-          const diff = Math.abs(c - r) + Math.abs(c - b);
+          const diff = Math.abs(d[i] - d[i + 4]) + Math.abs(d[i] - d[i + w * 4]);
           somaGrad += diff;
           count++;
         }
@@ -792,16 +802,13 @@
       ctx.drawImage(canvas, 0, 0, w, h);
       const d = ctx.getImageData(0, 0, w, h).data;
 
-      let pixelsEscuros = 0;
-      const total = w * h;
+      let escuros = 0;
       for (let i = 0; i < d.length; i += 4) {
-        const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        if (lum < 145) pixelsEscuros++;
+        if (d[i] < 145) escuros++;
       }
-      return pixelsEscuros / total;
+      return escuros / (w * h);
     }
 
-    // Cria perfil horizontal por linha (assinatura 1D) para casar sobreposição entre frames
     function calcularAssinaturaFaixa(canvas) {
       const w = 96;
       const h = 96;
@@ -812,32 +819,30 @@
       ctx.drawImage(canvas, 0, 0, w, h);
       const d = ctx.getImageData(0, 0, w, h).data;
 
-      const perfilLinhas = new Float32Array(h);
+      const perfil = new Float32Array(h);
       for (let y = 0; y < h; y++) {
         let soma = 0;
         for (let x = 0; x < w; x++) {
-          const i = (y * w + x) * 4;
-          soma += (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+          soma += d[(y * w + x) * 4];
         }
-        perfilLinhas[y] = soma / w;
+        perfil[y] = soma / w;
       }
-      return perfilLinhas;
+      return perfil;
     }
 
     function estimarSobreposicaoVertical(assAnterior, assAtual, alturaReal) {
-      const N = assAnterior.length; // 96
+      const N = assAnterior.length;
       let melhorShift = 0;
       let menorErro = Infinity;
 
-      // Testa deslocamentos verticais de 0% a 75% (movimento de cima para baixo)
       const maxShift = Math.floor(N * 0.75);
       for (let shift = 0; shift <= maxShift; shift++) {
-        const tamSobreposicao = N - shift;
+        const tam = N - shift;
         let erro = 0;
-        for (let k = 0; k < tamSobreposicao; k++) {
+        for (let k = 0; k < tam; k++) {
           erro += Math.abs(assAnterior[shift + k] - assAtual[k]);
         }
-        erro /= tamSobreposicao;
+        erro /= tam;
         if (erro < menorErro) {
           menorErro = erro;
           melhorShift = shift;
@@ -845,16 +850,13 @@
       }
 
       const similaridade = Math.max(0, 1 - (menorErro / 65));
-      const fracaoSobreposicao = (N - melhorShift) / N;
-      const sobreposicaoPx = Math.round(alturaReal * fracaoSobreposicao);
-      const deslocamentoPx = Math.round(alturaReal * (melhorShift / N));
-
-      return { similaridade, sobreposicaoPx, deslocamentoPx };
+      const fracaoSob = (N - melhorShift) / N;
+      return {
+        similaridade,
+        sobreposicaoPx: Math.round(alturaReal * fracaoSob),
+        deslocamentoPx: Math.round(alturaReal * (melhorShift / N))
+      };
     }
-
-    // ════════════════════════════════════════════════════════════════════
-    // ETAPA 3, 4 & 5: RECONSTRUÇÃO PANORÂMICA DO DOCUMENTO + PRÉ-PROCESSAMENTO
-    // ════════════════════════════════════════════════════════════════════
 
     function reconstruirCanvasCompleto(paraPreview) {
       if (faixasCapturadas.length === 0) return null;
@@ -871,8 +873,7 @@
         }
       });
 
-      // Limita altura máxima de segurança mantendo altíssima nitidez para OCR
-      const maxAltura = paraPreview ? 420 : 4800;
+      const maxAltura = paraPreview ? 420 : 4200;
       const escala = alturaTotal > maxAltura ? (maxAltura / alturaTotal) : (paraPreview ? (120 / larguraBase) : 1);
 
       const out = document.createElement("canvas");
@@ -889,7 +890,6 @@
           ctx.drawImage(f.canvas, 0, 0, f.canvas.width, f.canvas.height, 0, cursorY, out.width, hDest);
           cursorY += hDest;
         } else {
-          // Recorta a porção sobreposta superior e desenha apenas a continuação nova com fusão suave
           const corteTop = Math.min(Math.round(f.canvas.height * 0.72), f.sobreposicaoPx);
           const alturaSrc = f.canvas.height - corteTop;
           const hDest = Math.round(alturaSrc * escala);
@@ -912,50 +912,58 @@
         faixasCapturadas.length + " faixa(s) unida(s) sem duplicação.";
     }
 
-    // Pré-processamento adaptativo para legibilidade de DANFE (remove sombras, preserva números finos)
-    function ajustarContrasteDocumento(canvasOrigem, binarizacaoForte) {
-      const out = document.createElement("canvas");
-      out.width = canvasOrigem.width;
-      out.height = canvasOrigem.height;
-      const ctx = out.getContext("2d");
-      ctx.drawImage(canvasOrigem, 0, 0);
-
-      const imgData = ctx.getImageData(0, 0, out.width, out.height);
-      const d = imgData.data;
-
-      // Calcula luminância média para compensar iluminação/sombra
-      let somaLum = 0;
-      for (let i = 0; i < d.length; i += 16) {
-        somaLum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-      }
-      const mediaLum = somaLum / (d.length / 16);
-      const limiarBranco = Math.min(220, Math.max(150, mediaLum * 1.08));
-
-      for (let i = 0; i < d.length; i += 4) {
-        let g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        if (binarizacaoForte) {
-          if (g > limiarBranco) {
-            g = 255;
-          } else {
-            g = Math.max(0, (g - 55) * 1.55);
-          }
-        } else {
-          g = Math.min(255, Math.max(0, (g - mediaLum) * 1.28 + 152));
-        }
-        d[i] = d[i + 1] = d[i + 2] = g;
-      }
-
-      ctx.putImageData(imgData, 0, 0);
-      return out;
-    }
-
     // ════════════════════════════════════════════════════════════════════
-    // ETAPA 6, 7, 8 & 10: OCR POSICIONAL POR REGIÕES + TABELA DANFE + PDF
+    // ETAPA 6: OCR POR FAIXA CAPTURADA (TESSERACT V5 COM { blocks: true })
     // ════════════════════════════════════════════════════════════════════
 
     function marcarEtapa(num, statusTxt) {
       const li = document.getElementById("etapa-" + num);
       if (li) li.querySelector("strong").textContent = statusTxt;
+    }
+
+    // Extrai palavras com coordenadas tanto de data.words quanto da árvore blocks -> paragraphs -> lines -> words
+    function extrairPalavrasTesseractV5(dataOcr, offsetY) {
+      const lista = [];
+      if (!dataOcr) return lista;
+
+      if (Array.isArray(dataOcr.words) && dataOcr.words.length > 0) {
+        dataOcr.words.forEach(function(w) {
+          const txt = String(w.text || "").trim();
+          if (!txt) return;
+          lista.push({
+            text: txt,
+            x: w.bbox ? w.bbox.x0 : 0,
+            y: (w.bbox ? w.bbox.y0 : 0) + offsetY,
+            width: w.bbox ? (w.bbox.x1 - w.bbox.x0) : 0,
+            height: w.bbox ? (w.bbox.y1 - w.bbox.y0) : 14,
+            confidence: Number(w.confidence || 0)
+          });
+        });
+        return lista;
+      }
+
+      if (Array.isArray(dataOcr.blocks)) {
+        dataOcr.blocks.forEach(function(blk) {
+          (blk.paragraphs || []).forEach(function(par) {
+            (par.lines || []).forEach(function(ln) {
+              (ln.words || []).forEach(function(w) {
+                const txt = String(w.text || "").trim();
+                if (!txt) return;
+                lista.push({
+                  text: txt,
+                  x: w.bbox ? w.bbox.x0 : 0,
+                  y: (w.bbox ? w.bbox.y0 : 0) + offsetY,
+                  width: w.bbox ? (w.bbox.x1 - w.bbox.x0) : 0,
+                  height: w.bbox ? (w.bbox.y1 - w.bbox.y0) : 14,
+                  confidence: Number(w.confidence || 0)
+                });
+              });
+            });
+          });
+        });
+      }
+
+      return lista;
     }
 
     async function finalizarCapturaEProcessar() {
@@ -969,77 +977,72 @@
       document.getElementById("secProcessamento").style.display = "block";
 
       try {
-        // ETAPA 1-3: Reconstrução panorâmica em alta resolução
+        // ETAPA 1-3: Reconstrução panorâmica para visualização e PDF
         marcarEtapa(1, "⏳ Montando...");
-        const canvasBrutoReconstruido = reconstruirCanvasCompleto(false);
+        canvasVisualizacao = reconstruirCanvasCompleto(false);
+        resultadoNota.imagemVisualizacaoDataUrl = canvasVisualizacao.toDataURL("image/jpeg", 0.86);
         marcarEtapa(1, "✅ OK");
 
-        // ETAPA 4-5: Pré-processamento (Alta res para OCR vs Visualização limpa)
-        marcarEtapa(2, "⏳ Tratando...");
-        canvasOcrAltaRes = ajustarContrasteDocumento(canvasBrutoReconstruido, true);
-        canvasVisualizacao = ajustarContrasteDocumento(canvasBrutoReconstruido, false);
-        resultadoNota.imagemAltaResDataUrl = canvasOcrAltaRes.toDataURL("image/jpeg", 0.92);
-        resultadoNota.imagemVisualizacaoDataUrl = canvasVisualizacao.toDataURL("image/jpeg", 0.84);
-        marcarEtapa(2, "✅ OK");
+        // ETAPA 4-5: Preparação das faixas em alta nitidez
+        marcarEtapa(2, "✅ OK (" + faixasCapturadas.length + " faixa(s))");
 
-        // ETAPA 6: OCR Posicional com palavras, coordenadas (x, y, width, height) e confiança
-        marcarEtapa(3, "⏳ Lendo regiões...");
-        const ocrRes = await Tesseract.recognize(canvasOcrAltaRes, "por");
-        const palavras = extrairPalavrasComCoordenadas(ocrRes.data);
-        const textoCompleto = ocrRes.data.text || "";
-        marcarEtapa(3, "✅ " + palavras.length + " palavras");
+        // ETAPA 6: Executa OCR faixa por faixa com { blocks: true } para nunca perder palavras pequenas
+        marcarEtapa(3, "⏳ Lendo 0/" + faixasCapturadas.length + "...");
+        const todasPalavras = [];
+        const textosPorFaixa = [];
+        let offsetYAcumulado = 0;
+        let larguraRef = faixasCapturadas[0].canvas.width;
 
-        // ETAPA 7-8: Segmentação por Regiões DANFE + Reconstrução Colunar + Validação Matemática
+        const worker = await Tesseract.createWorker("por");
+        try {
+          for (let i = 0; i < faixasCapturadas.length; i++) {
+            marcarEtapa(3, "⏳ Lendo " + (i + 1) + "/" + faixasCapturadas.length + "...");
+            const cFaixa = faixasCapturadas[i].canvas;
+            const res = await worker.recognize(cFaixa, {}, { blocks: true, text: true });
+            const palavrasFaixa = extrairPalavrasTesseractV5(res.data, offsetYAcumulado);
+            todasPalavras.push(...palavrasFaixa);
+            if (res.data && res.data.text) {
+              textosPorFaixa.push(res.data.text);
+            }
+            offsetYAcumulado += cFaixa.height;
+          }
+        } finally {
+          await worker.terminate();
+        }
+
+        const textoConsolidado = textosPorFaixa.join("\n");
+        marcarEtapa(3, "✅ " + todasPalavras.length + " palavras");
+
+        // ETAPA 7-8: Interpretação estruturada DANFE (Posicional + Textual) e validação matemática
         marcarEtapa(4, "⏳ Analisando DANFE...");
-        interpretarDanfePorRegioes(palavras, textoCompleto, canvasOcrAltaRes.width, canvasOcrAltaRes.height);
+        interpretarDanfeCompleta(todasPalavras, textoConsolidado, larguraRef, offsetYAcumulado);
         marcarEtapa(4, "✅ " + resultadoNota.itens.length + " item(ns)");
 
-        // ETAPA 10: Geração do PDF preservando a imagem reconstruída completa
+        // ETAPA 10: Geração do PDF com a imagem reconstruída completa
         marcarEtapa(5, "⏳ Gerando PDF...");
         gerarPdfDaNotaReconstruida();
         marcarEtapa(5, "✅ PDF Pronto");
 
-        // Abre tela de conferência
-        setTimeout(abrirTelaConferencia, 350);
+        setTimeout(abrirTelaConferencia, 300);
       } catch (erro) {
         alert("Erro durante o processamento da nota: " + erro.message);
         reiniciarScannerCompleto();
       }
     }
 
-    function extrairPalavrasComCoordenadas(dataOcr) {
-      const lista = [];
-      if (dataOcr && Array.isArray(dataOcr.words)) {
-        dataOcr.words.forEach(function(w) {
-          const txt = String(w.text || "").trim();
-          if (!txt) return;
-          lista.push({
-            text: txt,
-            x: w.bbox ? w.bbox.x0 : 0,
-            y: w.bbox ? w.bbox.y0 : 0,
-            x1: w.bbox ? w.bbox.x1 : 0,
-            y1: w.bbox ? w.bbox.y1 : 0,
-            width: w.bbox ? (w.bbox.x1 - w.bbox.x0) : 0,
-            height: w.bbox ? (w.bbox.y1 - w.bbox.y0) : 0,
-            confidence: Number(w.confidence || 0)
-          });
-        });
-      }
-      return lista;
-    }
+    // ════════════════════════════════════════════════════════════════════
+    // ETAPA 7 & 8: PARSER HÍBRIDO DANFE (POSICIONAL + TEXTUAL + MATEMÁTICA)
+    // ════════════════════════════════════════════════════════════════════
 
-    // Agrupa palavras em linhas visuais com base na coordenada Y
     function agruparPalavrasEmLinhas(palavras) {
       if (!palavras || palavras.length === 0) return [];
-      const ordenadas = palavras.slice().sort(function(a, b) {
-        return (a.y - b.y) || (a.x - b.x);
-      });
+      const ordenadas = palavras.slice().sort((a, b) => (a.y - b.y) || (a.x - b.x));
 
       const linhas = [];
       ordenadas.forEach(function(p) {
-        const tolY = Math.max(10, p.height * 0.65);
+        const tolY = Math.max(12, p.height * 0.7);
         let linhaAlvo = null;
-        for (let i = linhas.length - 1; i >= Math.max(0, linhas.length - 4); i--) {
+        for (let i = linhas.length - 1; i >= Math.max(0, linhas.length - 5); i--) {
           if (Math.abs(linhas[i].yMedio - p.y) <= tolY) {
             linhaAlvo = linhas[i];
             break;
@@ -1054,71 +1057,56 @@
       });
 
       linhas.forEach(function(l) {
-        l.palavras.sort(function(a, b) { return a.x - b.x; });
-        l.texto = l.palavras.map(function(w) { return w.text; }).join(" ");
-        l.confMedia = l.palavras.reduce(function(acc, w) { return acc + w.confidence; }, 0) / l.palavras.length;
+        l.palavras.sort((a, b) => a.x - b.x);
+        l.texto = l.palavras.map(w => w.text).join(" ");
+        l.confMedia = l.palavras.reduce((acc, w) => acc + w.confidence, 0) / l.palavras.length;
       });
 
       return linhas;
     }
 
-    function interpretarDanfePorRegioes(palavras, textoBruto, larguraImg, alturaImg) {
-      const linhas = agruparPalavrasEmLinhas(palavras);
+    function interpretarDanfeCompleta(palavras, textoBruto, larguraImg, alturaTotal) {
+      const linhasPosicionais = agruparPalavrasEmLinhas(palavras);
+      const linhasTexto = textoBruto.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
 
-      // Localiza âncoras estruturais da DANFE
-      let yAncoraDestinatario = alturaImg * 0.24;
-      let yAncoraProdutos = alturaImg * 0.42;
-      let yAncoraTotais = alturaImg * 0.82;
+      // 1. Chave NF-e (44 dígitos com validação Módulo 11)
+      const { chave, confiancaChave } = extrairChaveNfeValidada(textoBruto);
 
-      linhas.forEach(function(l) {
-        const up = l.texto.toUpperCase();
-        if (/DESTINAT[AÁ]RIO\s*\/?\s*REMETENTE/.test(up)) yAncoraDestinatario = l.yMedio;
-        if (/DADOS\s+DO\s+PRODUTO|DESCRI[CÇ][AÃ]O\s+DO\s+PRODUTO/.test(up)) yAncoraProdutos = l.yMedio;
-        if (/C[AÁ]LCULO\s+DO\s+IMPOSTO|DADOS\s+ADICIONAIS|ISSQN|VALOR\s+TOTAL\s+DA\s+NOTA/.test(up) && l.yMedio > yAncoraProdutos + 40) {
-          if (l.yMedio < yAncoraTotais || yAncoraTotais === alturaImg * 0.82) {
-            yAncoraTotais = l.yMedio;
-          }
-        }
-      });
+      // 2. Número da NF, Série e Data de Emissão
+      const { numeroNota, serie, dataEmissao, confiancaNum } = extrairNumeroSerieData(chave, linhasTexto, textoBruto);
 
-      const linhasCabecalho = linhas.filter(l => l.yMedio <= yAncoraDestinatario);
-      const linhasDestinatario = linhas.filter(l => l.yMedio > yAncoraDestinatario && l.yMedio < yAncoraProdutos);
-      const linhasProdutos = linhas.filter(l => l.yMedio >= yAncoraProdutos && l.yMedio <= yAncoraTotais);
-      const linhasTotais = linhas.filter(l => l.yMedio > yAncoraTotais);
+      // 3. Emitente / Fornecedor
+      const { fornecedor, cnpjEmitente, confiancaForn } = extrairEmitenteSemantico(linhasTexto);
 
-      // ── REGIÃO 1: CABEÇALHO (CHAVE, NÚMERO NF, SÉRIE, EMITENTE) ─────
-      const { chave, confiancaChave } = extrairChaveNfeValidada(textoBruto, linhasCabecalho);
-      const { numeroNota, serie, dataEmissao, confiancaNum } = extrairNumeroSerieData(chave, linhasCabecalho, textoBruto);
-      const { fornecedor, cnpjEmitente, confiancaForn } = extrairEmitenteSemantico(linhasCabecalho);
+      // 4. Valor Total da NF
+      const totaisInfo = extrairTotaisDanfe(linhasTexto, textoBruto);
 
-      // ── REGIÃO 2: DESTINATÁRIO ─────────────────────────────────────
-      const destinatario = extrairDestinatario(linhasDestinatario);
+      // 5. Tabela de Produtos (combina extração posicional por colunas + fallback por linhas textuais)
+      let itensExtraidos = extrairTabelaProdutosPosicional(linhasPosicionais, larguraImg, totaisInfo.valorTotalNf);
+      if (itensExtraidos.length === 0) {
+        itensExtraidos = extrairItensPorRegexDanfe(linhasTexto, totaisInfo.valorTotalNf);
+      }
 
-      // ── REGIÃO 4: TOTAIS (extraído antes para validar contra os itens) ─
-      const totaisInfo = extrairTotaisDanfe(linhasTotais, textoBruto);
+      // Desduplica itens repetidos vindos de faixas sobrepostas
+      itensExtraidos = desduplicarItens(itensExtraidos);
 
-      // ── REGIÃO 3: TABELA DE PRODUTOS POR POSIÇÃO DE COLUNAS ────────
-      const itensExtraidos = extrairTabelaProdutosPosicional(linhasProdutos, larguraImg, totaisInfo.valorTotalNf);
-
-      // Se o total da NF não foi lido no rodapé, usa a soma validada dos itens
+      const somaItens = itensExtraidos.reduce((acc, it) => acc + it.valorTotal, 0);
       let valorTotalFinal = totaisInfo.valorTotalNf;
       let confTotal = totaisInfo.confiancaTotal;
-      const somaItens = itensExtraidos.reduce((acc, it) => acc + it.valorTotal, 0);
 
       if (valorTotalFinal <= 0 && somaItens > 0) {
         valorTotalFinal = Number(somaItens.toFixed(2));
-        confTotal = 78;
+        confTotal = 80;
       }
 
-      // Validação cruzada: Soma dos itens vs Valor Total da NF
       const divergencias = [];
-      if (valorTotalFinal > 0 && somaItens > 0 && Math.abs(valorTotalFinal - somaItens) > 0.15) {
+      if (valorTotalFinal > 0 && somaItens > 0 && Math.abs(valorTotalFinal - somaItens) > 0.25) {
         divergencias.push(
           "⚠️ Divergência entre itens (R$ " + somaItens.toFixed(2) + ") e total da NF (R$ " + valorTotalFinal.toFixed(2) + ")."
         );
       }
       if (itensExtraidos.some(it => it.statusValidacao === "CONFERIR")) {
-        divergencias.push("Existem itens marcados como CONFERIR devido a arredondamento ou leitura parcial.");
+        divergencias.push("Alguns itens foram marcados como CONFERIR — revise quantidade e valor unitário.");
       }
 
       const confGeral = Math.round((confiancaChave + confiancaNum + confiancaForn + confTotal) / 4);
@@ -1129,11 +1117,12 @@
         dataEmissao: dataEmissao,
         fornecedor: fornecedor,
         cnpjEmitente: cnpjEmitente,
-        destinatario: destinatario,
+        destinatario: "",
         chave: chave,
         valorTotal: Number(valorTotalFinal.toFixed(2)),
-        totaisDetalhados: totaisInfo,
         itens: itensExtraidos,
+        textoBrutoCompleto: textoBruto,
+        totalPalavrasLidas: palavras.length,
         confiancaOcr: confGeral,
         confiancaCampos: {
           numeroNota: Math.round(confiancaNum),
@@ -1142,14 +1131,12 @@
           valorTotal: Math.round(confTotal)
         },
         divergencias: divergencias,
-        imagemAltaResDataUrl: resultadoNota.imagemAltaResDataUrl,
         imagemVisualizacaoDataUrl: resultadoNota.imagemVisualizacaoDataUrl,
         imagemComprimidaBase64: "",
         pdfBase64: ""
       };
     }
 
-    // Valida dígito verificador (Módulo 11) da Chave NF-e de 44 dígitos
     function validarDigitoChaveNfe(chave44) {
       if (!/^\d{44}$/.test(chave44)) return false;
       const uf = parseInt(chave44.substring(0, 2), 10);
@@ -1164,58 +1151,62 @@
         peso = peso === 9 ? 2 : peso + 1;
       }
       const resto = soma % 11;
-      const dvCalculado = (resto === 0 || resto === 1) ? 0 : (11 - resto);
-      return dvCalculado === parseInt(chave44.charAt(43), 10);
+      const dv = (resto === 0 || resto === 1) ? 0 : (11 - resto);
+      return dv === parseInt(chave44.charAt(43), 10);
     }
 
-    function extrairChaveNfeValidada(textoBruto, linhasCab) {
+    function extrairChaveNfeValidada(textoBruto) {
       const candidatos = new Set();
-      // Procura sequências agrupadas em blocos de 4 dígitos (padrão DANFE) ou contínuas
-      const blocos = textoBruto.match(/(?:\d[\s.-]*){44}/g) || [];
+
+      // Normaliza confusões comuns de OCR apenas em blocos numéricos longos
+      const blocos = textoBruto.match(/(?:[\dOIlSB][\s.-]*){44}/gi) || [];
       blocos.forEach(function(b) {
-        const limpo = b.replace(/\D/g, "");
+        const limpo = b
+          .replace(/[Oo]/g, "0")
+          .replace(/[Iil]/g, "1")
+          .replace(/S/g, "5")
+          .replace(/B/g, "8")
+          .replace(/\D/g, "");
         if (limpo.length === 44) candidatos.add(limpo);
       });
+
       const sohDigitos = textoBruto.replace(/\D/g, "");
       for (let i = 0; i <= sohDigitos.length - 44; i++) {
         candidatos.add(sohDigitos.substring(i, i + 44));
       }
 
-      let melhorChave = "";
+      let melhor = "";
       let melhorScore = 0;
 
       candidatos.forEach(function(cand) {
-        let score = 40;
-        if (validarDigitoChaveNfe(cand)) score += 55; // DV Módulo 11 válido!
+        let score = 45;
+        if (validarDigitoChaveNfe(cand)) score += 54;
         if (/^(1[1-9]|2[1-9]|3[1-5]|4[1-3]|5[0-3])/.test(cand)) score += 4;
         if (score > melhorScore) {
           melhorScore = score;
-          melhorChave = cand;
+          melhor = cand;
         }
       });
 
       return {
-        chave: melhorScore >= 44 ? melhorChave : "",
-        confiancaChave: melhorChave ? Math.min(99, melhorScore) : 0
+        chave: melhorScore >= 49 ? melhor : "",
+        confiancaChave: melhorScore >= 49 ? Math.min(99, melhorScore) : 0
       };
     }
 
-    function extrairNumeroSerieData(chave, linhasCab, textoBruto) {
+    function extrairNumeroSerieData(chave, linhasTexto, textoBruto) {
       let numeroNota = "";
       let serie = "";
       let dataEmissao = "";
       let conf = 0;
 
-      // 1. Extrai diretamente da Chave NF-e validada (posições 22..25 = série, 25..34 = número NF)
       if (chave && chave.length === 44) {
         serie = String(parseInt(chave.substring(22, 25), 10) || "1");
         numeroNota = String(parseInt(chave.substring(25, 34), 10) || "");
         conf = 96;
       }
 
-      // 2. Confirma ou extrai do texto do cabeçalho DANFE ("Nº 000.819.105")
-      const textoCab = linhasCab.map(l => l.texto).join("\n");
-      const mNf = textoCab.match(/N[º°o.\s]*0*(\d{1,3}(?:\.\d{3}){1,2}|\d{4,9})/i);
+      const mNf = textoBruto.match(/N[º°o.\s]*0*(\d{1,3}(?:\.\d{3}){1,2}|\d{4,9})/i);
       if (mNf) {
         const numLido = mNf[1].replace(/\./g, "");
         if (!numeroNota) {
@@ -1226,7 +1217,7 @@
         }
       }
 
-      const mSerie = textoCab.match(/S[EÉ]RIE[:\s]*0*(\d{1,3})/i);
+      const mSerie = textoBruto.match(/S[EÉ]RIE[:\s]*0*(\d{1,3})/i);
       if (mSerie && !serie) serie = mSerie[1];
 
       const mData = textoBruto.match(/(\d{2}\/\d{2}\/20\d{2})/);
@@ -1235,78 +1226,39 @@
       return { numeroNota, serie, dataEmissao, confiancaNum: conf };
     }
 
-    function extrairEmitenteSemantico(linhasCab) {
+    function extrairEmitenteSemantico(linhasTexto) {
       let fornecedor = "";
       let cnpj = "";
       let conf = 0;
 
-      for (let i = 0; i < linhasCab.length; i++) {
-        const txt = linhasCab[i].texto;
+      for (let i = 0; i < Math.min(28, linhasTexto.length); i++) {
+        const txt = linhasTexto[i];
         const up = txt.toUpperCase();
 
         const mCnpj = txt.match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/);
         if (mCnpj && !cnpj) cnpj = mCnpj[1];
 
-        // Ignora cabeçalhos padrão de canhoto e DANFE
-        if (/RECEBEMOS\s+DE|IDENTIFICA[CÇ][AÃ]O\s+DO\s+EMITENTE|DANFE|DOCUMENTO\s+AUXILIAR|CHAVE\s+DE\s+ACESSO|CONTROLE\s+DO\s+FISCO|NATUREZA\s+DA\s+OPERA|INSCRI[CÇ][AÃ]O\s+ESTADUAL|PROTOCOLO\s+DE\s+AUTORIZA/.test(up)) {
-          // Se achou "IDENTIFICAÇÃO DO EMITENTE", a razão social costuma estar na linha imediatamente seguinte
-          if (/IDENTIFICA[CÇ][AÃ]O\s+DO\s+EMITENTE/.test(up) && linhasCab[i + 1]) {
-            const prox = linhasCab[i + 1].texto.replace(/[^A-Z0-9\s.&-]/gi, "").trim();
-            if (prox.length >= 4 && !/DANFE|CNPJ/.test(prox.toUpperCase())) {
-              fornecedor = prox.slice(0, 70);
-              conf = Math.min(96, Math.round(linhasCab[i + 1].confMedia));
-            }
+        if (/IDENTIFICA[CÇ][AÃ]O\s+DO\s+EMITENTE/.test(up) && linhasTexto[i + 1]) {
+          const prox = linhasTexto[i + 1].replace(/[^A-Z0-9\s.&-]/gi, "").trim();
+          if (prox.length >= 4 && !/DANFE|CNPJ|DOCUMENTO/.test(prox.toUpperCase())) {
+            fornecedor = prox.slice(0, 75);
+            conf = 92;
+            break;
           }
+        }
+
+        if (/RECEBEMOS\s+DE|DANFE|DOCUMENTO\s+AUXILIAR|CHAVE\s+DE\s+ACESSO|CONTROLE\s+DO\s+FISCO|NATUREZA\s+DA\s+OPERA|INSCRI[CÇ][AÃ]O\s+ESTADUAL|PROTOCOLO\s+DE\s+AUTORIZA|DESTINAT[AÁ]RIO/.test(up)) {
           continue;
         }
 
         if (!fornecedor && txt.length >= 5 && /[A-Z]{3,}/.test(up) && !/^\d+$/.test(txt)) {
-          fornecedor = txt.replace(/[^A-Z0-9\s.&-]/gi, "").trim().slice(0, 70);
-          conf = Math.min(92, Math.round(linhasCab[i].confMedia));
+          fornecedor = txt.replace(/[^A-Z0-9\s.&-]/gi, "").trim().slice(0, 75);
+          conf = 84;
         }
       }
 
       return { fornecedor, cnpjEmitente: cnpj, confiancaForn: conf };
     }
-
-    function extrairDestinatario(linhasDest) {
-      for (let i = 0; i < linhasDest.length; i++) {
-        const up = linhasDest[i].texto.toUpperCase();
-        if (/NOME\s*\/?\s*RAZ[AÃ]O\s+SOCIAL/.test(up) && linhasDest[i + 1]) {
-          return linhasDest[i + 1].texto.slice(0, 70);
-        }
-      }
-      return "";
-    }
-
-    function extrairTotaisDanfe(linhasTotais, textoBruto) {
-      const txtTot = linhasTotais.map(l => l.texto).join("\n") + "\n" + textoBruto;
-      let valorTotalNf = 0;
-      let conf = 0;
-
-      const padroesTotal = [
-        /VALOR\s+TOTAL\s+DA\s+NOTA[^\d]{0,25}(\d{1,3}(?:\.\d{3})*,\d{2})/i,
-        /V\.?\s*TOTAL\s+DA\s+NOTA[^\d]{0,25}(\d{1,3}(?:\.\d{3})*,\d{2})/i,
-        /VALOR\s+TOTAL\s+DOS\s+PRODUTOS[^\d]{0,25}(\d{1,3}(?:\.\d{3})*,\d{2})/i
-      ];
-
-      for (const rx of padroesTotal) {
-        const m = txtTot.match(rx);
-        if (m) {
-          valorTotalNf = parseFloat(m[1].replace(/\./g, "").replace(",", ".")) || 0;
-          if (valorTotalNf > 0) {
-            conf = 92;
-            break;
-          }
-        }
-      }
-
-      return { valorTotalNf, confiancaTotal: conf };
-    }
-
-    // ════════════════════════════════════════════════════════════════════
-    // REGIÃO 3: RECONSTRUÇÃO COLUNAR DA TABELA DANFE (POSICIONAL X / Y)
-    // ════════════════════════════════════════════════════════════════════
 
     function parseNumeroBr(str) {
       if (!str) return NaN;
@@ -1321,102 +1273,111 @@
       return parseFloat(limpo);
     }
 
-    function extrairTabelaProdutosPosicional(linhasProd, larguraImg, valorTotalNf) {
-      // Detecta as coordenadas X das colunas a partir do cabeçalho da tabela DANFE
+    function extrairTotaisDanfe(linhasTexto, textoBruto) {
+      let valorTotalNf = 0;
+      let conf = 0;
+
+      const padroes = [
+        /VALOR\s+TOTAL\s+DA\s+NOTA[^\d]{0,30}(\d{1,3}(?:\.\d{3})*,\d{2})/i,
+        /V\.?\s*TOTAL\s+DA\s+NOTA[^\d]{0,30}(\d{1,3}(?:\.\d{3})*,\d{2})/i,
+        /VALOR\s+TOTAL\s+DOS\s+PRODUTOS[^\d]{0,30}(\d{1,3}(?:\.\d{3})*,\d{2})/i
+      ];
+
+      for (const rx of padroes) {
+        const m = textoBruto.match(rx);
+        if (m) {
+          const val = parseNumeroBr(m[1]);
+          if (val > 0) {
+            valorTotalNf = val;
+            conf = 92;
+            break;
+          }
+        }
+      }
+
+      return { valorTotalNf, confiancaTotal: conf };
+    }
+
+    function extrairTabelaProdutosPosicional(linhasPos, larguraImg, valorTotalNf) {
       let colX = {
         codigo: larguraImg * 0.06,
-        descricao: larguraImg * 0.25,
+        descricao: larguraImg * 0.22,
         ncm: larguraImg * 0.48,
-        cfop: larguraImg * 0.56,
-        un: larguraImg * 0.61,
-        qtd: larguraImg * 0.68,
-        vlUnit: larguraImg * 0.78,
-        vlTotal: larguraImg * 0.90
+        un: larguraImg * 0.60,
+        qtd: larguraImg * 0.67,
+        vlUnit: larguraImg * 0.77,
+        vlTotal: larguraImg * 0.89
       };
 
-      let indiceInicioDados = 0;
-      for (let i = 0; i < linhasProd.length; i++) {
-        const up = linhasProd[i].texto.toUpperCase();
-        if (/DESCRI[CÇ][AÃ]O|QUANT|QTD|UNIT|TOTAL/.test(up) && (/QTD|QUANT/.test(up) || /UNIT/.test(up))) {
-          indiceInicioDados = i + 1;
-          linhasProd[i].palavras.forEach(function(w) {
+      let dentroTabela = false;
+      const itens = [];
+      const termosFim = /(?:C[AÁ]LCULO\s+DO\s+IMPOSTO|BASE\s+DE\s+C[AÁ]LCULO|VALOR\s+DO\s+ICMS|VALOR\s+TOTAL\s+DA\s+NOTA|VALOR\s+TOTAL\s+DOS\s+PRODUTOS|DADOS\s+ADICIONAIS|INFORMA[CÇ][OÕ]ES\s+COMPLEMENTARES|ISSQN)/i;
+
+      for (let i = 0; i < linhasPos.length; i++) {
+        const linha = linhasPos[i];
+        const up = linha.texto.toUpperCase();
+
+        if (/DADOS\s+DO\s+PRODUTO|DESCRI[CÇ][AÃ]O\s+DO\s+PRODUTO/.test(up) || (/DESCRI[CÇ][AÃ]O/.test(up) && /QTD|QUANT|UNIT/.test(up))) {
+          dentroTabela = true;
+          linha.palavras.forEach(function(w) {
             const wu = w.text.toUpperCase();
             if (/C[OÓ]D/.test(wu)) colX.codigo = w.x;
             if (/DESCRI/.test(wu)) colX.descricao = w.x;
             if (/NCM/.test(wu)) colX.ncm = w.x;
-            if (/CFOP/.test(wu)) colX.cfop = w.x;
             if (/^UN/.test(wu)) colX.un = w.x;
             if (/QTD|QUANT/.test(wu)) colX.qtd = w.x;
             if (/UNIT/.test(wu)) colX.vlUnit = w.x;
             if (/TOTAL/.test(wu)) colX.vlTotal = w.x;
           });
-          break;
+          continue;
         }
-      }
 
-      const termosBloqueados = /(?:C[AÁ]LCULO\s+DO\s+IMPOSTO|BASE\s+DE\s+C[AÁ]LCULO|VALOR\s+DO\s+ICMS|VALOR\s+TOTAL\s+DA\s+NOTA|VALOR\s+TOTAL\s+DOS\s+PRODUTOS|VALOR\s+DO\s+FRETE|DESCONTO|DADOS\s+ADICIONAIS|TRANSPORTADOR|INFORMA[CÇ][OÕ]ES\s+COMPLEMENTARES|DUPLICATA|FATURA)/i;
+        if (dentroTabela && termosFim.test(up)) {
+          dentroTabela = false;
+          continue;
+        }
 
-      const itens = [];
-
-      for (let i = indiceInicioDados; i < linhasProd.length; i++) {
-        const linha = linhasProd[i];
-        if (termosBloqueados.test(linha.texto)) break;
-
-        // Separa palavras da linha nas colunas usando posição X
+        // Mesmo que o cabeçalho não tenha sido lido perfeitamente, analisa linhas com estrutura de produto DANFE
         const tokensDesc = [];
-        const tokensNumericos = [];
+        const tokensNum = [];
         let codigoProd = "";
         let unidade = "UN";
 
         linha.palavras.forEach(function(w) {
-          const centroX = w.x + w.width / 2;
-          const limpoNum = w.text.replace(/[^\d.,]/g, "");
-          const ehDecimalOuNumero = /^\d{1,3}(?:\.\d{3})*,\d{2,4}$/.test(w.text) || /^\d+[.,]\d{2,4}$/.test(w.text);
+          const cx = w.x + w.width / 2;
+          const ehDecimal = /^\d{1,3}(?:\.\d{3})*,\d{2,4}$/.test(w.text) || /^\d+[.,]\d{2,4}$/.test(w.text);
 
-          if (centroX < colX.descricao - 15 && /^[A-Z0-9.-]{2,15}$/i.test(w.text)) {
+          if (cx < colX.descricao - 10 && /^[A-Z0-9.-]{2,16}$/i.test(w.text)) {
             codigoProd = w.text;
           } else if (/^(UN|PC|PÇ|CX|KG|LT|PAR|KT|FD|RL|MT)$/i.test(w.text)) {
             unidade = w.text.toUpperCase();
-          } else if (ehDecimalOuNumero && centroX >= colX.un - 20) {
-            tokensNumericos.push({
-              valor: parseNumeroBr(w.text),
-              x: centroX,
-              raw: w.text,
-              conf: w.confidence
-            });
-          } else if (centroX >= colX.descricao - 20 && centroX < colX.ncm + 20) {
-            // Ignora NCM de 8 dígitos isolado
+          } else if (ehDecimal && cx >= colX.un - 30) {
+            tokensNum.push({ valor: parseNumeroBr(w.text), x: cx });
+          } else if (cx >= colX.descricao - 25 && cx < colX.ncm + 35) {
             if (!/^\d{8}$/.test(w.text) && !/^[1567]\d{3}$/.test(w.text)) {
               tokensDesc.push(w.text);
             }
           }
         });
 
-        // Precisa ter descrição e valores numéricos na faixa direita (Qtd, VlUnit, VlTotal)
-        const descricao = tokensDesc.join(" ").replace(/\s+/g, " ").trim();
-        if (descricao.length < 3 || tokensNumericos.length < 2) continue;
+        const desc = tokensDesc.join(" ").replace(/\s+/g, " ").trim();
+        if (desc.length < 3 || tokensNum.length < 2) continue;
+        if (/(?:TOTAL|SUBTOTAL|FRETE|DESCONTO|ICMS|IPI|PIS|COFINS|BASE|TRIBUTOS|DUPLICATA|PARCELA|RECEBEMOS)/i.test(desc)) continue;
 
-        tokensNumericos.sort((a, b) => a.x - b.x);
-
+        tokensNum.sort((a, b) => a.x - b.x);
         let qtd = 1;
         let vlUnit = 0;
         let vlTotal = 0;
 
-        if (tokensNumericos.length >= 3) {
-          // Colunas clássicas: [..., QTD, VL_UNIT, VL_TOTAL]
-          const n = tokensNumericos.length;
-          qtd = tokensNumericos[n - 3].valor;
-          vlUnit = tokensNumericos[n - 2].valor;
-          vlTotal = tokensNumericos[n - 1].valor;
-        } else if (tokensNumericos.length === 2) {
-          // Dois números identificados na linha (ex.: VL_UNIT e VL_TOTAL ou QTD e VL_TOTAL)
-          const a = tokensNumericos[0].valor;
-          const b = tokensNumericos[1].valor;
-          if (Math.abs(a - b) < 0.01) {
-            qtd = 1;
-            vlUnit = a;
-            vlTotal = b;
-          } else if (a > 0 && b > a && Math.abs(Math.round(b / a) * a - b) < 0.05) {
+        if (tokensNum.length >= 3) {
+          const n = tokensNum.length;
+          qtd = tokensNum[n - 3].valor;
+          vlUnit = tokensNum[n - 2].valor;
+          vlTotal = tokensNum[n - 1].valor;
+        } else {
+          const a = tokensNum[0].valor;
+          const b = tokensNum[1].valor;
+          if (a > 0 && b > a && Math.abs(Math.round(b / a) * a - b) < 0.05) {
             qtd = Math.round(b / a);
             vlUnit = a;
             vlTotal = b;
@@ -1427,22 +1388,20 @@
           }
         }
 
-        if (vlTotal <= 0 || vlTotal === valorTotalNf && linhasProd.length > 5) continue;
+        if (vlTotal <= 0 || (valorTotalNf > 0 && Math.abs(vlTotal - valorTotalNf) < 0.01 && itens.length > 0)) continue;
 
-        // Validação matemática: valorTotal ≈ quantidade × valorUnitario
         const esperado = Number((qtd * vlUnit).toFixed(2));
-        const diferenca = Math.abs(esperado - vlTotal);
-        const statusValidacao = (qtd > 0 && vlUnit > 0 && diferenca <= 0.08) ? "OK" : "CONFERIR";
+        const statusValidacao = (qtd > 0 && vlUnit > 0 && Math.abs(esperado - vlTotal) <= 0.12) ? "OK" : "CONFERIR";
 
         itens.push({
           codigo: codigoProd || "-",
-          produto: descricao.slice(0, 85),
-          descricao: descricao.slice(0, 120),
+          produto: desc.slice(0, 85),
+          descricao: desc.slice(0, 120),
           unidade: unidade,
           quantidade: Number(qtd.toFixed(3)),
           valorUnitario: Number(vlUnit.toFixed(4)),
           valorTotal: Number(vlTotal.toFixed(2)),
-          confianca: Math.round(linha.confMedia),
+          confianca: Math.round(linha.confMedia || 80),
           statusValidacao: statusValidacao
         });
       }
@@ -1450,27 +1409,66 @@
       return itens;
     }
 
+    // Fallback textual caso a linha DANFE venha quebrada
+    function extrairItensPorRegexDanfe(linhasTexto, valorTotalNf) {
+      const itens = [];
+      const bloqueio = /(?:VALOR\s+TOTAL|SUBTOTAL|FRETE|DESCONTO|ICMS|IPI|PIS|COFINS|BASE\s+DE\s+C[AÁ]LCULO|TRIBUTOS|DUPLICATA|PARCELA|RECEBEMOS)/i;
+
+      linhasTexto.forEach(function(linha) {
+        if (bloqueio.test(linha)) return;
+        const m3 = linha.match(/^(.{4,70}?)\s+(\d+(?:[.,]\d{1,3})?)\s+(\d{1,3}(?:\.\d{3})*,\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2})$/);
+        if (m3) {
+          const desc = m3[1].replace(/^[\d.\-\s]+/, "").trim();
+          const qtd = parseNumeroBr(m3[2]) || 1;
+          const vUnit = parseNumeroBr(m3[3]) || 0;
+          const vTot = parseNumeroBr(m3[4]) || 0;
+          if (desc.length >= 3 && vTot > 0 && vTot !== valorTotalNf) {
+            const ok = Math.abs(qtd * vUnit - vTot) <= 0.12;
+            itens.push({
+              codigo: "-",
+              produto: desc.slice(0, 85),
+              descricao: desc.slice(0, 120),
+              unidade: "UN",
+              quantidade: qtd,
+              valorUnitario: vUnit,
+              valorTotal: vTot,
+              confianca: 78,
+              statusValidacao: ok ? "OK" : "CONFERIR"
+            });
+          }
+        }
+      });
+
+      return itens;
+    }
+
+    function desduplicarItens(lista) {
+      const vistos = new Set();
+      return lista.filter(function(it) {
+        const chave = it.produto.toLowerCase().slice(0, 25) + "|" + it.valorTotal.toFixed(2);
+        if (vistos.has(chave)) return false;
+        vistos.add(chave);
+        return true;
+      });
+    }
+
     // ════════════════════════════════════════════════════════════════════
-    // ETAPA 10: PDF COM IMAGEM DIGITALIZADA COMPLETA + ESPELHO ESTRUTURADO
+    // ETAPA 10: PDF COM IMAGEM DIGITALIZADA COMPLETA
     // ════════════════════════════════════════════════════════════════════
 
     function gerarPdfDaNotaReconstruida() {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-      // Página 1: Imagem digitalizada reconstruída preservando proporção
       const wImg = canvasVisualizacao.width;
       const hImg = canvasVisualizacao.height;
-      const maxW = 194;
-      const maxH = 281;
-      const ratio = Math.min(maxW / wImg, maxH / hImg);
+      const ratio = Math.min(194 / wImg, 281 / hImg);
       const drawW = wImg * ratio;
       const drawH = hImg * ratio;
       const offsetX = (210 - drawW) / 2;
 
       pdf.addImage(resultadoNota.imagemVisualizacaoDataUrl, "JPEG", offsetX, 8, drawW, drawH);
 
-      // Comprime imagem dedicada para transmissão ao Apps Script sem estourar payload
       const canvasEnvio = document.createElement("canvas");
       const maxLargEnvio = 950;
       const escEnvio = canvasVisualizacao.width > maxLargEnvio ? (maxLargEnvio / canvasVisualizacao.width) : 1;
@@ -1491,7 +1489,9 @@
       document.getElementById("secConferencia").style.display = "block";
 
       document.getElementById("txtResumoAreas").textContent =
-        "Reconstruído a partir de " + faixasCapturadas.length + " área(s) capturada(s)";
+        "Reconstruído a partir de " + faixasCapturadas.length + " área(s) • " + resultadoNota.totalPalavrasLidas + " palavras lidas";
+
+      document.getElementById("txtOcrBrutoDebug").value = resultadoNota.textoBrutoCompleto || "(Nenhum texto detectado — aproxime mais a câmera da nota)";
 
       document.getElementById("editNumNota").value = resultadoNota.numeroNota;
       document.getElementById("editFornecedor").value = resultadoNota.fornecedor;
@@ -1524,7 +1524,7 @@
       if (itens.length === 0) {
         box.innerHTML =
           '<div style="font-size:13px;color:#B45309;background:#FFFBEB;padding:10px;border-radius:8px;border:1px solid #FCD34D">' +
-          'Nenhum item extraído automaticamente. Toque em <strong>+ Adicionar item</strong> ou refaça a captura mais devagar sobre a tabela.' +
+          'Nenhum item extraído automaticamente. Toque em <strong>+ Adicionar item</strong> ou refaça a captura mais próximo da tabela.' +
           '</div>';
         document.getElementById("txtSomaItens").textContent = "R$ 0,00";
         return;
@@ -1591,7 +1591,7 @@
         }
       }
       const esperado = Number((it.quantidade * it.valorUnitario).toFixed(2));
-      it.statusValidacao = (it.produto && it.quantidade > 0 && Math.abs(esperado - it.valorTotal) <= 0.08) ? "OK" : "CONFERIR";
+      it.statusValidacao = (it.produto && it.quantidade > 0 && Math.abs(esperado - it.valorTotal) <= 0.12) ? "OK" : "CONFERIR";
       renderizarListaItensConferencia();
       validarEstadoConferencia();
     }
@@ -1606,16 +1606,14 @@
 
       document.getElementById("txtSomaItens").textContent = "R$ " + somaItens.toFixed(2);
 
-      // Alerta de divergência matemática
       const boxDiv = document.getElementById("alertaDivergencia");
-      if (valorTotal > 0 && somaItens > 0 && Math.abs(valorTotal - somaItens) > 0.15) {
+      if (valorTotal > 0 && somaItens > 0 && Math.abs(valorTotal - somaItens) > 0.25) {
         boxDiv.textContent = "⚠️ Divergência entre itens (R$ " + somaItens.toFixed(2) + ") e total da NF (R$ " + valorTotal.toFixed(2) + "). Confira antes de enviar.";
         boxDiv.style.display = "block";
       } else {
         boxDiv.style.display = "none";
       }
 
-      // Alerta de campos obrigatórios/incompletos
       const erros = [];
       if (!numNota) erros.push("Número da NF obrigatório.");
       if (!fornecedor) erros.push("Fornecedor/Emitente obrigatório.");
@@ -1646,10 +1644,6 @@
       iniciarCapturaProgressiva();
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // ETAPA 11: RETORNO ESTRUTURADO PARA O APPS SCRIPT (COMPATÍVEL 100%)
-    // ════════════════════════════════════════════════════════════════════
-
     async function enviarParaAppsScript() {
       if (!validarEstadoConferencia()) {
         alert("Corrija os campos obrigatórios destacados antes de enviar ao Apps Script.");
@@ -1663,7 +1657,6 @@
       const itensValidos = (resultadoNota.itens || []).filter(it => String(it.produto || "").trim().length > 0);
 
       const payloadCompat = {
-        // Campos compatíveis com o Apps Script atual
         numeroNota: numNota,
         fornecedor: fornecedor,
         chave: chave,
@@ -1680,13 +1673,10 @@
         imagemBase64: resultadoNota.imagemComprimidaBase64,
         pdfBase64: resultadoNota.pdfBase64,
         confiancaOcr: resultadoNota.confiancaOcr,
-
-        // Novos metadados avançados do Scanner Progressivo SPX
         dadosExtraidos: {
           serie: resultadoNota.serie,
           dataEmissao: resultadoNota.dataEmissao,
-          cnpjEmitente: resultadoNota.cnpjEmitente,
-          destinatario: resultadoNota.destinatario
+          cnpjEmitente: resultadoNota.cnpjEmitente
         },
         confiancaCampos: resultadoNota.confiancaCampos,
         imagemDigitalizadaBase64: resultadoNota.imagemComprimidaBase64,
@@ -1697,7 +1687,6 @@
 
       const statusEl = document.getElementById("statusEnvioFinal");
 
-      // 1. Envio direto via postMessage para a janela do Apps Script que abriu o scanner
       if (window.opener && !window.opener.closed) {
         window.opener.postMessage({
           tipo: "SPX_SCANNER_RESULTADO",
@@ -1709,7 +1698,6 @@
         return;
       }
 
-      // 2. Fallback caso o scanner tenha sido aberto isoladamente fora do Apps Script
       const jsonCompacto = JSON.stringify({
         numeroNota: payloadCompat.numeroNota,
         fornecedor: payloadCompat.fornecedor,
