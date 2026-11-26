@@ -74,14 +74,14 @@
       background: #111827;
       border-radius: 12px;
       overflow: hidden;
-      min-height: 310px;
+      min-height: 320px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     video {
       width: 100%;
-      max-height: 410px;
+      max-height: 420px;
       object-fit: cover;
       display: block;
     }
@@ -100,7 +100,7 @@
       height: 2px;
       background: linear-gradient(90deg, transparent, #EE4D2D, #FF8A65, #EE4D2D, transparent);
       box-shadow: 0 0 8px #EE4D2D;
-      animation: laserMove 2.2s infinite ease-in-out;
+      animation: laserMove 2s infinite ease-in-out;
       pointer-events: none;
     }
     @keyframes laserMove {
@@ -203,7 +203,7 @@
       width: 68px;
       height: 110px;
       object-fit: contain;
-      background: #F3F4F6;
+      background: #FFFFFF;
       border: 1px solid #D1D5DB;
       border-radius: 6px;
       flex-shrink: 0;
@@ -364,13 +364,18 @@
     .modal-card {
       background: #FFFFFF;
       border-radius: 14px;
-      max-width: 640px;
+      max-width: 680px;
       width: 100%;
       max-height: 92vh;
       overflow: auto;
       padding: 14px;
     }
-    .modal-card img { width: 100%; border: 1px solid var(--border); border-radius: 8px; }
+    .modal-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .modal-card img { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: #FFF; }
   </style>
 </head>
 <body>
@@ -380,7 +385,7 @@
       <span class="spx-badge">SPX</span>
       <div>
         <div class="topbar-title">SCANNER INTELIGENTE DE NOTA FISCAL</div>
-        <div class="topbar-sub">Captura Progressiva Rápida • Reconstrução • OCR DANFE</div>
+        <div class="topbar-sub">Digitalização Real • Redigitalização DANFE • Leitura Rápida</div>
       </div>
     </div>
     <button class="btn btn-outline btn-sm" type="button" onclick="reiniciarScannerCompleto()">🔄 Refazer</button>
@@ -394,28 +399,28 @@
         <video id="videoCam" autoplay playsinline muted></video>
         <div class="scan-frame-guide"></div>
         <div class="scan-laser" id="scanLaser"></div>
-        <div class="hud-pill"><span class="dot-rec"></span> <span id="hudStatusPill">Capturando documento</span></div>
-        <div class="hud-feedback" id="hudFeedback">Mova o celular lentamente pela nota fiscal.</div>
+        <div class="hud-pill"><span class="dot-rec"></span> <span id="hudStatusPill">Escaneando documento</span></div>
+        <div class="hud-feedback" id="hudFeedback">Aponte para o topo da nota e desça devagar.</div>
       </div>
 
       <div class="progress-panel">
         <div class="progress-head">
-          <span>CAPTURA DO DOCUMENTO (MÁX. 8 ÁREAS)</span>
+          <span>DIGITALIZAÇÃO PROGRESSIVA (MÁX. 6 FAIXAS)</span>
           <span id="txtProgressoPct">0%</span>
         </div>
         <div class="progress-bar-bg">
           <div class="progress-bar-fill" id="barraProgresso"></div>
         </div>
         <div class="progress-stats">
-          <span>Áreas capturadas: <strong id="txtAreasCapturadas">0 / 8</strong></span>
-          <span>Dados encontrados: <strong id="txtDadosEncontrados">0</strong></span>
+          <span>Áreas escaneadas: <strong id="txtAreasCapturadas">0 / 6</strong></span>
+          <span>Linhas detectadas: <strong id="txtDadosEncontrados">0</strong></span>
         </div>
 
         <div class="stitch-strip-wrap">
           <canvas id="canvasStitchPreview" width="120" height="200"></canvas>
           <div style="font-size:12px;color:#374151;line-height:1.45">
-            <strong>Montagem Progressiva em Tempo Real</strong><br>
-            <span id="txtSubStatusMontagem">Aponte para o topo da nota e desça devagar até os totais.</span>
+            <strong>Documento Escaneado em Tempo Real</strong><br>
+            <span id="txtSubStatusMontagem">Papel branco limpo + remoção automática de sombras.</span>
           </div>
         </div>
       </div>
@@ -423,25 +428,24 @@
       <div class="grid-2">
         <button class="btn btn-dark" type="button" id="btnPausarRetomar" onclick="alternarPausaCaptura()">⏸ Pausar</button>
         <button class="btn btn-spx" type="button" id="btnFinalizarCaptura" onclick="finalizarCapturaEProcessar()" disabled>
-          ✅ Finalizar Leitura
+          ✅ Finalizar Escaneamento
         </button>
       </div>
 
       <input type="file" id="inputMultiFotos" accept="image/*" capture="environment" multiple style="display:none" />
       <button class="btn btn-outline" type="button" onclick="document.getElementById('inputMultiFotos').click()">
-        📱 Capturar Sequência pela Câmera Nativa
+        📱 Importar / Capturar pela Câmera Nativa
       </button>
     </section>
 
     <!-- FASE 2: PROCESSAMENTO EM ETAPAS -->
     <section id="secProcessamento" class="card" style="display:none">
-      <div class="card-title">⚙️ Documento capturado. Processando...</div>
+      <div class="card-title">⚙️ Documento escaneado. Redigitalizando...</div>
       <ul class="step-list" id="listaEtapasProc">
-        <li id="etapa-1"><span>ETAPA 1–3: Reconstrução panorâmica e eliminação de duplicações</span><strong>⏳</strong></li>
-        <li id="etapa-2"><span>ETAPA 4–5: Fusão inteligente em blocos de alta nitidez</span><strong>⏳</strong></li>
-        <li id="etapa-3"><span>ETAPA 6: OCR posicional rápido</span><strong>⏳</strong></li>
-        <li id="etapa-4"><span>ETAPA 7–8: Extração da tabela DANFE e validação matemática</span><strong>⏳</strong></li>
-        <li id="etapa-5"><span>ETAPA 10: Montagem do PDF de alta legibilidade</span><strong>⏳</strong></li>
+        <li id="etapa-1"><span>ETAPA 1: Limpeza de fundo branco e fusão contínua sem duplicidade</span><strong>⏳</strong></li>
+        <li id="etapa-2"><span>ETAPA 2: Leitura rápida OCR de todo o texto escrito na nota</span><strong>⏳</strong></li>
+        <li id="etapa-3"><span>ETAPA 3: Extração instantânea de itens, quantidades e valores</span><strong>⏳</strong></li>
+        <li id="etapa-4"><span>ETAPA 4: Redigitalização da DANFE limpa e geração do PDF</span><strong>⏳</strong></li>
       </ul>
     </section>
 
@@ -456,12 +460,13 @@
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
           <div>
-            <div class="card-title" style="margin-bottom:2px">DOCUMENTO DIGITALIZADO</div>
-            <div style="font-size:12px;color:#6B7280" id="txtResumoAreas">Reconstruído a partir de 0 áreas capturadas</div>
+            <div class="card-title" style="margin-bottom:2px">DOCUMENTO ESCANEADO & REDIGITALIZADO</div>
+            <div style="font-size:12px;color:#6B7280" id="txtResumoAreas">Processado</div>
           </div>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-dark btn-sm" type="button" onclick="abrirModalDocumento()">🔍 Visualizar documento</button>
-            <button class="btn btn-outline btn-sm" type="button" onclick="reiniciarScannerCompleto()">🔄 Refazer captura</button>
+            <button class="btn btn-dark btn-sm" type="button" onclick="abrirModalDocumento('redigitalizado')">📄 Ver Redigitalizada</button>
+            <button class="btn btn-outline btn-sm" type="button" onclick="abrirModalDocumento('scan')">🔍 Ver Scan Limpo</button>
+            <button class="btn btn-outline btn-sm" type="button" onclick="reiniciarScannerCompleto()">🔄 Refazer</button>
           </div>
         </div>
       </div>
@@ -516,8 +521,8 @@
         <div id="containerItens"></div>
 
         <details style="margin-top:10px;font-size:12px;color:#6B7280">
-          <summary style="cursor:pointer;font-weight:700">Ver texto bruto lido pelo OCR</summary>
-          <textarea id="txtOcrBrutoDebug" rows="5" readonly style="margin-top:6px;font-size:11px;background:#F9FAFB"></textarea>
+          <summary style="cursor:pointer;font-weight:700">Ver todo texto escrito lido do documento</summary>
+          <textarea id="txtOcrBrutoDebug" rows="6" readonly style="margin-top:6px;font-size:11px;background:#F9FAFB"></textarea>
         </details>
       </div>
 
@@ -532,12 +537,16 @@
 
   </main>
 
-  <!-- Modal de Visualização do Documento Reconstruído -->
+  <!-- Modal de Visualização do Documento -->
   <div class="modal-bg" id="modalDocumento" onclick="if(event.target===this)fecharModalDocumento()">
     <div class="modal-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <strong style="font-size:14px">📄 Documento Digitalizado Reconstruído</strong>
-        <button class="btn btn-outline btn-sm" type="button" onclick="fecharModalDocumento()">Fechar ✕</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap">
+        <strong style="font-size:14px" id="tituloModalDoc">📄 Documento Redigitalizado</strong>
+        <div class="modal-tabs" style="margin:0">
+          <button class="btn btn-dark btn-sm" type="button" onclick="alternarAbaModal('redigitalizado')">DANFE Redigitalizada</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="alternarAbaModal('scan')">Scan Preto & Branco</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="fecharModalDocumento()">✕</button>
+        </div>
       </div>
       <img id="imgDocumentoModal" alt="Documento Digitalizado" />
     </div>
@@ -545,11 +554,11 @@
 
   <script>
     // ════════════════════════════════════════════════════════════════════
-    // ESTADO GLOBAL DO SCANNER PROGRESSIVO SPX (V2 OTIMIZADA)
+    // ESTADO GLOBAL DO SCANNER REAL SPX (V3 — LIMPEZA + REDIGITALIZAÇÃO)
     // ════════════════════════════════════════════════════════════════════
 
-    const MAX_FAIXAS_CAPTURA = 8; // Limite ideal para folha A4 DANFE completa sem redundância
-    const LARGURA_OCR_PADRAO = 1150; // Dentro de 1050-1400 px para leitura rápida e precisa
+    const MAX_FAIXAS_CAPTURA = 6;
+    const LARGURA_SCAN = 1100;
 
     let videoStream = null;
     let capturaAtiva = false;
@@ -559,19 +568,16 @@
     let timerCaptura = null;
     let timerFeedbackOk = null;
 
-    // Pré-aquecimento do Worker Tesseract em segundo plano para leitura instantânea
     let workerTesseractPromise = null;
 
-    // Dupla qualidade: faixasOCR para leitura rápida e faixasDocumento para PDF/visualização de alta resolução
     let faixasCapturadas = [];
     let ultimaAssinatura = null;
     let ultimoTimestampFrame = 0;
     let dadosDetectadosContador = 0;
 
-    // Canvas reutilizáveis para reduzir alocações de memória no celular
-    let canvasVisualizacao = document.createElement("canvas");
+    let canvasScanLimpo = document.createElement("canvas");
+    let canvasDanfeRedigitalizada = document.createElement("canvas");
     let canvasTrabalhoMetricas = document.createElement("canvas");
-    let canvasTrabalhoOcr = document.createElement("canvas");
 
     let resultadoNota = {
       numeroNota: "",
@@ -588,6 +594,7 @@
       confiancaOcr: 0,
       confiancaCampos: { numeroNota: 0, fornecedor: 0, chave: 0, valorTotal: 0, itens: 0 },
       divergencias: [],
+      imagemScanLimpoDataUrl: "",
       imagemVisualizacaoDataUrl: "",
       imagemComprimidaBase64: "",
       pdfBase64: ""
@@ -608,18 +615,15 @@
     function liberarMemoriaTemporaria() {
       faixasCapturadas.forEach(function(f) {
         if (f.canvas) { f.canvas.width = 1; f.canvas.height = 1; }
-        if (f.canvasDoc) { f.canvasDoc.width = 1; f.canvasDoc.height = 1; }
       });
       faixasCapturadas = [];
       ultimaAssinatura = null;
       canvasTrabalhoMetricas.width = 1;
       canvasTrabalhoMetricas.height = 1;
-      canvasTrabalhoOcr.width = 1;
-      canvasTrabalhoOcr.height = 1;
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // ETAPA 1 & 2: CAPTURA PROGRESSIVA INTELIGENTE (SEM EXCESSO DE FRAMES)
+    // 1. CAPTURA PROGRESSIVA RÁPIDA COM DETECÇÃO DE QUALIDADE
     // ════════════════════════════════════════════════════════════════════
 
     async function iniciarCapturaProgressiva() {
@@ -635,7 +639,7 @@
       document.getElementById("secConferencia").style.display = "none";
       document.getElementById("btnFinalizarCaptura").disabled = true;
       document.getElementById("btnPausarRetomar").textContent = "⏸ Pausar";
-      document.getElementById("hudStatusPill").textContent = "Capturando documento";
+      document.getElementById("hudStatusPill").textContent = "Escaneando documento";
       document.getElementById("scanLaser").style.display = "block";
 
       try {
@@ -654,9 +658,9 @@
         setFeedback("Aponte para o topo da nota e desça devagar.");
 
         clearInterval(timerCaptura);
-        timerCaptura = setInterval(analisarFrameVideo, 450);
+        timerCaptura = setInterval(analisarFrameVideo, 360);
       } catch (e) {
-        setFeedback("Toque em 'Capturar Sequência pela Câmera Nativa' para fotografar a nota.");
+        setFeedback("Toque em 'Importar / Capturar pela Câmera Nativa' para escanear a nota.");
       }
     }
 
@@ -664,7 +668,7 @@
       capturaPausada = !capturaPausada;
       const btn = document.getElementById("btnPausarRetomar");
       btn.textContent = capturaPausada ? "▶ Retomar" : "⏸ Pausar";
-      document.getElementById("hudStatusPill").textContent = capturaPausada ? "Captura pausada" : "Capturando documento";
+      document.getElementById("hudStatusPill").textContent = capturaPausada ? "Escaneamento pausado" : "Escaneando documento";
       document.getElementById("scanLaser").style.display = capturaPausada ? "none" : "block";
     }
 
@@ -678,22 +682,22 @@
         reader.onload = function(ev) {
           const img = new Image();
           img.onload = function() {
-            const par = capturarParQualidade(img);
-            const ass = calcularAssinaturaFaixa(par.canvasOcr);
+            const scanC = transformarEmDocumentoEscaneado(img);
+            const ass = calcularAssinaturaFaixa(scanC);
+            const dens = analisarMetricasRapidas(scanC).densidade;
             faixasCapturadas.push({
-              canvas: par.canvasOcr,
-              canvasDoc: par.canvasDoc,
+              canvas: scanC,
               assinatura: ass,
-              sobreposicaoPx: faixasCapturadas.length === 0 ? 0 : Math.round(par.canvasOcr.height * 0.22),
-              densidadeTexto: calcularDensidadeTexto(par.canvasOcr)
+              sobreposicaoPx: faixasCapturadas.length === 0 ? 0 : Math.round(scanC.height * 0.22),
+              densidadeTexto: dens
             });
-            dadosDetectadosContador += Math.max(4, Math.round(faixasCapturadas[faixasCapturadas.length - 1].densidadeTexto * 15));
+            dadosDetectadosContador += Math.max(5, Math.round(dens * 25));
             carregadas++;
             if (carregadas === arquivos.length) {
               atualizarPreviewMontagem();
               atualizarHudProgresso();
               document.getElementById("btnFinalizarCaptura").disabled = false;
-              notificarCapturaArea(faixasCapturadas.length, "Toque em Finalizar Leitura.");
+              notificarCapturaArea(faixasCapturadas.length, "Toque em Finalizar Escaneamento.");
             }
           };
           img.src = ev.target.result;
@@ -704,14 +708,14 @@
 
     function avaliarQualidadeOptica(canvas) {
       const metricas = analisarMetricasRapidas(canvas);
-      if (metricas.reflexo > 0.34) {
+      if (metricas.reflexo > 0.42 && metricas.densidade < 0.025) {
         return { ok: false, msg: "⚠️ REDUZA O REFLEXO — incline levemente o celular." };
       }
-      if (metricas.nitidez < 11.5) {
+      if (metricas.nitidez < 12) {
         return { ok: false, msg: "⚠️ IMAGEM DESFOCADA — mantenha o celular parado." };
       }
-      if (metricas.densidade < 0.03) {
-        return { ok: false, msg: "⚠️ APROXIME A CÂMERA — enquadre a nota fiscal." };
+      if (metricas.densidade < 0.022) {
+        return { ok: false, msg: "⚠️ APROXIME A CÂMERA — enquadre o texto da nota." };
       }
       return { ok: true, nitidez: metricas.nitidez, densidade: metricas.densidade };
     }
@@ -719,7 +723,7 @@
     function analisarFrameVideo() {
       if (!capturaAtiva || capturaPausada) return;
       if (faixasCapturadas.length >= MAX_FAIXAS_CAPTURA) {
-        setFeedback("✓ DOCUMENTO COMPLETO — toque em Finalizar Leitura.");
+        setFeedback("✓ DOCUMENTO COMPLETO — toque em Finalizar Escaneamento.");
         return;
       }
 
@@ -727,57 +731,55 @@
       if (!video.videoWidth || !video.videoHeight) return;
 
       const agora = Date.now();
-      if (agora - ultimoTimestampFrame < 380) return;
+      if (agora - ultimoTimestampFrame < 320) return;
       ultimoTimestampFrame = agora;
 
-      const par = capturarParQualidade(video);
-      const frameRecortado = par.canvasOcr;
+      // Converte imediatamente o frame da câmera em página escaneada limpa (fundo branco + tinta preta)
+      const frameEscaneado = transformarEmDocumentoEscaneado(video);
 
-      const qualidade = avaliarQualidadeOptica(frameRecortado);
+      const qualidade = avaliarQualidadeOptica(frameEscaneado);
       if (!qualidade.ok) {
         setFeedback(qualidade.msg);
         return;
       }
 
-      const assAtual = calcularAssinaturaFaixa(frameRecortado);
+      const assAtual = calcularAssinaturaFaixa(frameEscaneado);
       if (!ultimaAssinatura) {
-        registrarNovaFaixa(frameRecortado, par.canvasDoc, assAtual, 0, qualidade.densidade);
+        registrarNovaFaixa(frameEscaneado, assAtual, 0, qualidade.densidade);
         notificarCapturaArea(1, "Desça devagar pela nota...");
         return;
       }
 
-      const resSob = estimarSobreposicaoVertical(ultimaAssinatura, assAtual, frameRecortado.height);
+      const resSob = estimarSobreposicaoVertical(ultimaAssinatura, assAtual, frameEscaneado.height);
 
-      // Exige deslocamento real de pelo menos 30% antes de salvar nova faixa (evita frames duplicados)
-      if (resSob.deslocamentoPx < frameRecortado.height * 0.30) {
-        setFeedback("Área já capturada — continue descendo devagar.");
+      if (resSob.deslocamentoPx < frameEscaneado.height * 0.28) {
+        setFeedback("Área já escaneada — continue descendo devagar.");
         return;
       }
 
-      if (resSob.similaridade < 0.14 && faixasCapturadas.length > 0) {
-        setFeedback("⚠️ MOVA MAIS DEVAGAR para não pular linhas.");
+      if (resSob.similaridade < 0.12 && faixasCapturadas.length > 0) {
+        setFeedback("⚠️ MOVA MAIS DEVAGAR para não pular itens.");
         return;
       }
 
-      registrarNovaFaixa(frameRecortado, par.canvasDoc, assAtual, resSob.sobreposicaoPx, qualidade.densidade);
+      registrarNovaFaixa(frameEscaneado, assAtual, resSob.sobreposicaoPx, qualidade.densidade);
 
       if (faixasCapturadas.length >= MAX_FAIXAS_CAPTURA) {
-        notificarCapturaArea(faixasCapturadas.length, "✓ DOCUMENTO COMPLETO — toque em Finalizar Leitura.");
+        notificarCapturaArea(faixasCapturadas.length, "✓ DOCUMENTO COMPLETO — toque em Finalizar.");
       } else {
         notificarCapturaArea(faixasCapturadas.length, "Continue descendo...");
       }
     }
 
-    function registrarNovaFaixa(canvasFaixa, canvasDoc, assinatura, sobreposicaoPx, densidade) {
+    function registrarNovaFaixa(canvasFaixa, assinatura, sobreposicaoPx, densidade) {
       faixasCapturadas.push({
         canvas: canvasFaixa,
-        canvasDoc: canvasDoc,
         assinatura: assinatura,
         sobreposicaoPx: sobreposicaoPx,
         densidadeTexto: densidade
       });
       ultimaAssinatura = assinatura;
-      dadosDetectadosContador += Math.max(4, Math.round(densidade * 18));
+      dadosDetectadosContador += Math.max(5, Math.round(densidade * 25));
 
       document.getElementById("btnFinalizarCaptura").disabled = false;
       atualizarHudProgresso();
@@ -792,18 +794,17 @@
       } catch (e) {}
 
       const el = document.getElementById("hudFeedback");
-      const texto = "✓ CAPTURA OK • ÁREA " + indiceArea + "/" + MAX_FAIXAS_CAPTURA + (complemento ? " — " + complemento : "");
-      el.textContent = texto;
+      el.textContent = "✓ ESCANEADO • ÁREA " + indiceArea + "/" + MAX_FAIXAS_CAPTURA + (complemento ? " — " + complemento : "");
       el.classList.add("ok-flash");
       clearTimeout(timerFeedbackOk);
       timerFeedbackOk = setTimeout(function() {
         el.classList.remove("ok-flash");
-      }, 950);
+      }, 850);
     }
 
     function atualizarHudProgresso() {
       const qtd = faixasCapturadas.length;
-      const pct = Math.min(100, Math.round((qtd / 6) * 100));
+      const pct = Math.min(100, Math.round((qtd / 4) * 100));
       document.getElementById("txtProgressoPct").textContent = pct + "%";
       document.getElementById("barraProgresso").style.width = pct + "%";
       document.getElementById("txtAreasCapturadas").textContent = qtd + " / " + MAX_FAIXAS_CAPTURA;
@@ -818,73 +819,93 @@
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // VISÃO COMPUTACIONAL: DUPLA QUALIDADE, MÉTRICAS E SOBREPOSIÇÃO
+    // 2. MOTOR DE ESCANEAMENTO REAL (EFEITO DOCUMENTO DIGITALIZADO PURO)
+    // Remove sombras de ambiente, corrige iluminação desigual e deixa
+    // o papel branco puro (#FFFFFF) com letras e linhas nítidas em preto.
     // ════════════════════════════════════════════════════════════════════
 
-    function capturarParQualidade(origem) {
+    function transformarEmDocumentoEscaneado(origem) {
       const srcW = origem.videoWidth || origem.width;
       const srcH = origem.videoHeight || origem.height;
 
       const margemX = Math.round(srcW * 0.04);
-      const margemY = Math.round(srcH * 0.06);
+      const margemY = Math.round(srcH * 0.05);
       const cropW = srcW - margemX * 2;
       const cropH = srcH - margemY * 2;
 
-      // 1. Imagem Documento: resolução próxima da original (sem upscaling artificial exagerado)
-      const docTargetW = Math.min(cropW, 1800);
-      const docEscala = docTargetW / cropW;
-      const canvasDoc = document.createElement("canvas");
-      canvasDoc.width = docTargetW;
-      canvasDoc.height = Math.max(100, Math.round(cropH * docEscala));
-      canvasDoc.getContext("2d").drawImage(origem, margemX, margemY, cropW, cropH, 0, 0, canvasDoc.width, canvasDoc.height);
-
-      // 2. Imagem OCR: 1050-1400 px otimizada para leitura
-      const targetW = Math.min(Math.max(cropW, 900), LARGURA_OCR_PADRAO);
+      const targetW = Math.min(Math.max(cropW, 950), LARGURA_SCAN);
       const escala = targetW / cropW;
       const targetH = Math.max(100, Math.round(cropH * escala));
 
       const c = document.createElement("canvas");
       c.width = targetW;
       c.height = targetH;
-      const ctx = c.getContext("2d");
+      const ctx = c.getContext("2d", { willReadFrequently: true });
       ctx.drawImage(origem, margemX, margemY, cropW, cropH, 0, 0, targetW, targetH);
 
-      return {
-        canvasOcr: realcarLegibilidadeSuave(c),
-        canvasDoc: canvasDoc
-      };
-    }
+      // Estima o mapa de iluminação do papel (fundo) em baixa resolução para eliminar sombras
+      const gridW = 32;
+      const gridH = Math.max(16, Math.round((targetH / targetW) * gridW));
+      const bgCanvas = document.createElement("canvas");
+      bgCanvas.width = gridW;
+      bgCanvas.height = gridH;
+      const bgCtx = bgCanvas.getContext("2d", { willReadFrequently: true });
+      bgCtx.drawImage(c, 0, 0, gridW, gridH);
+      const bgData = bgCtx.getImageData(0, 0, gridW, gridH).data;
 
-    function realcarLegibilidadeSuave(canvasOrigem) {
-      canvasTrabalhoOcr.width = canvasOrigem.width;
-      canvasTrabalhoOcr.height = canvasOrigem.height;
-      const ctx = canvasTrabalhoOcr.getContext("2d");
-      ctx.drawImage(canvasOrigem, 0, 0);
+      // Dilatação morfológica simples (máximo local 3x3) no mapa de fundo para apagar texto e manter só a cor do papel
+      const papelMap = new Float32Array(gridW * gridH);
+      for (let gy = 0; gy < gridH; gy++) {
+        for (let gx = 0; gx < gridW; gx++) {
+          let maxLum = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const ny = Math.min(gridH - 1, Math.max(0, gy + dy));
+              const nx = Math.min(gridW - 1, Math.max(0, gx + dx));
+              const idx = (ny * gridW + nx) * 4;
+              const lum = 0.299 * bgData[idx] + 0.587 * bgData[idx + 1] + 0.114 * bgData[idx + 2];
+              if (lum > maxLum) maxLum = lum;
+            }
+          }
+          papelMap[gy * gridW + gx] = Math.max(90, maxLum);
+        }
+      }
 
-      const imgData = ctx.getImageData(0, 0, canvasTrabalhoOcr.width, canvasTrabalhoOcr.height);
+      const imgData = ctx.getImageData(0, 0, targetW, targetH);
       const d = imgData.data;
 
-      let soma = 0;
-      let n = 0;
-      for (let i = 0; i < d.length; i += 24) {
-        soma += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        n++;
-      }
-      const media = n ? (soma / n) : 150;
+      for (let y = 0; y < targetH; y++) {
+        const gy = Math.min(gridH - 1, Math.floor((y / targetH) * gridH));
+        const rowGrid = gy * gridW;
+        const rowPix = y * targetW;
 
-      for (let i = 0; i < d.length; i += 4) {
-        const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        const ajustado = Math.min(255, Math.max(0, (lum - media) * 1.38 + 165));
-        d[i] = d[i + 1] = d[i + 2] = ajustado;
+        for (let x = 0; x < targetW; x++) {
+          const gx = Math.min(gridW - 1, Math.floor((x / targetW) * gridW));
+          const fundoLocal = papelMap[rowGrid + gx];
+
+          const i = (rowPix + x) * 4;
+          const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+
+          // Normaliza pixel pelo brilho local do papel: tudo acima de 82% do brilho do papel vira branco puro (255)
+          const norm = (lum / fundoLocal) * 255;
+          let finalVal;
+          if (norm >= 210) {
+            finalVal = 255; // Fundo do papel 100% branco limpo
+          } else if (norm <= 135) {
+            finalVal = 12;  // Tinta preta nítida
+          } else {
+            // Transição suave anti-aliasing para preservar bordas de números pequenos
+            finalVal = Math.round(((norm - 135) / 75) * 243 + 12);
+          }
+
+          d[i] = d[i + 1] = d[i + 2] = finalVal;
+        }
       }
 
       ctx.putImageData(imgData, 0, 0);
-
-      const out = document.createElement("canvas");
-      out.width = canvasTrabalhoOcr.width;
-      out.height = canvasTrabalhoOcr.height;
-      out.getContext("2d").drawImage(canvasTrabalhoOcr, 0, 0);
-      return out;
+      bgCanvas.width = 1;
+      bgCanvas.height = 1;
+      return c;
     }
 
     function analisarMetricasRapidas(canvas) {
@@ -892,7 +913,7 @@
       const h = Math.max(20, Math.round((canvas.height / canvas.width) * w));
       canvasTrabalhoMetricas.width = w;
       canvasTrabalhoMetricas.height = h;
-      const ctx = canvasTrabalhoMetricas.getContext("2d");
+      const ctx = canvasTrabalhoMetricas.getContext("2d", { willReadFrequently: true });
       ctx.drawImage(canvas, 0, 0, w, h);
       const d = ctx.getImageData(0, 0, w, h).data;
 
@@ -910,8 +931,8 @@
       let estourados = 0;
       const totalPx = w * h;
       for (let i = 0; i < d.length; i += 4) {
-        if (d[i] < 145) escuros++;
-        if (d[i] > 246) estourados++;
+        if (d[i] < 160) escuros++;
+        if (d[i] === 255) estourados++;
       }
 
       return {
@@ -921,20 +942,12 @@
       };
     }
 
-    function calcularNitidez(canvas) {
-      return analisarMetricasRapidas(canvas).nitidez;
-    }
-
-    function calcularDensidadeTexto(canvas) {
-      return analisarMetricasRapidas(canvas).densidade;
-    }
-
     function calcularAssinaturaFaixa(canvas) {
       const w = 80;
       const h = 80;
       canvasTrabalhoMetricas.width = w;
       canvasTrabalhoMetricas.height = h;
-      const ctx = canvasTrabalhoMetricas.getContext("2d");
+      const ctx = canvasTrabalhoMetricas.getContext("2d", { willReadFrequently: true });
       ctx.drawImage(canvas, 0, 0, w, h);
       const d = ctx.getImageData(0, 0, w, h).data;
 
@@ -977,22 +990,16 @@
       };
     }
 
-    // Une faixas num intervalo [inicio, fim) eliminando sobreposição repetida
-    function unirIntervaloFaixas(listaFaixas, larguraDestino, usarDocAltaQualidade) {
-      const propCanvas = usarDocAltaQualidade ? "canvasDoc" : "canvas";
-      const primeira = listaFaixas[0][propCanvas] || listaFaixas[0].canvas;
-      const larguraBase = primeira.width;
+    function unirIntervaloFaixas(listaFaixas, larguraDestino) {
+      const larguraBase = listaFaixas[0].canvas.width;
       const escala = larguraDestino / larguraBase;
       let alturaTotal = 0;
 
       listaFaixas.forEach(function(f, idx) {
-        const cAtual = f[propCanvas] || f.canvas;
-        const proporcaoFator = cAtual.height / (f.canvas.height || cAtual.height);
-        const sobAjustada = Math.round((f.sobreposicaoPx || 0) * proporcaoFator);
         if (idx === 0) {
-          alturaTotal += cAtual.height;
+          alturaTotal += f.canvas.height;
         } else {
-          const util = Math.max(Math.round(cAtual.height * 0.25), cAtual.height - sobAjustada);
+          const util = Math.max(Math.round(f.canvas.height * 0.25), f.canvas.height - f.sobreposicaoPx);
           alturaTotal += util;
         }
       });
@@ -1006,19 +1013,15 @@
 
       let cursorY = 0;
       listaFaixas.forEach(function(f, idx) {
-        const cAtual = f[propCanvas] || f.canvas;
-        const proporcaoFator = cAtual.height / (f.canvas.height || cAtual.height);
-        const sobAjustada = Math.round((f.sobreposicaoPx || 0) * proporcaoFator);
-
         if (idx === 0) {
-          const hDest = Math.round(cAtual.height * escala);
-          ctx.drawImage(cAtual, 0, 0, cAtual.width, cAtual.height, 0, cursorY, out.width, hDest);
+          const hDest = Math.round(f.canvas.height * escala);
+          ctx.drawImage(f.canvas, 0, 0, f.canvas.width, f.canvas.height, 0, cursorY, out.width, hDest);
           cursorY += hDest;
         } else {
-          const corteTop = Math.min(Math.round(cAtual.height * 0.72), sobAjustada);
-          const alturaSrc = cAtual.height - corteTop;
+          const corteTop = Math.min(Math.round(f.canvas.height * 0.72), f.sobreposicaoPx);
+          const alturaSrc = f.canvas.height - corteTop;
           const hDest = Math.round(alturaSrc * escala);
-          ctx.drawImage(cAtual, 0, corteTop, cAtual.width, alturaSrc, 0, cursorY, out.width, hDest);
+          ctx.drawImage(f.canvas, 0, corteTop, f.canvas.width, alturaSrc, 0, cursorY, out.width, hDest);
           cursorY += hDest;
         }
       });
@@ -1026,43 +1029,19 @@
       return out;
     }
 
-    function reconstruirCanvasCompleto(paraPreview, usarDocAltaQualidade) {
-      if (faixasCapturadas.length === 0) return null;
-      const prop = usarDocAltaQualidade ? "canvasDoc" : "canvas";
-      const primeira = faixasCapturadas[0][prop] || faixasCapturadas[0].canvas;
-      const larguraBase = primeira.width;
-      return unirIntervaloFaixas(faixasCapturadas, paraPreview ? 120 : larguraBase, Boolean(usarDocAltaQualidade));
-    }
-
-    // Agrupa as faixas em no máximo 3 super-blocos verticais para OCR ultrarrápido
-    function gerarBlocosConsolidadosParaOcr() {
-      const n = faixasCapturadas.length;
-      if (n <= 3) {
-        return faixasCapturadas.map(f => f.canvas);
-      }
-      const numGrupos = 3;
-      const tamGrupo = Math.ceil(n / numGrupos);
-      const blocos = [];
-      for (let i = 0; i < n; i += tamGrupo) {
-        const subLista = faixasCapturadas.slice(i, i + tamGrupo);
-        blocos.push(unirIntervaloFaixas(subLista, subLista[0].canvas.width, false));
-      }
-      return blocos;
-    }
-
     function atualizarPreviewMontagem() {
-      const mini = reconstruirCanvasCompleto(true, false);
-      if (!mini) return;
+      if (faixasCapturadas.length === 0) return;
+      const mini = unirIntervaloFaixas(faixasCapturadas, 120);
       const dest = document.getElementById("canvasStitchPreview");
       dest.width = mini.width;
       dest.height = mini.height;
       dest.getContext("2d").drawImage(mini, 0, 0);
       document.getElementById("txtSubStatusMontagem").textContent =
-        faixasCapturadas.length + " faixa(s) unida(s) sem duplicação.";
+        faixasCapturadas.length + " faixa(s) escaneada(s) em fundo branco limpo.";
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // ETAPA 6: OCR ULTRARRÁPIDO + ESTRATÉGIA COMPLEMENTAR SOB DEMANDA
+    // 3. OCR ULTRARRÁPIDO EM NO MÁXIMO 2 BLOCOS + PARSER RÁPIDO DE ITENS
     // ════════════════════════════════════════════════════════════════════
 
     function marcarEtapa(num, statusTxt) {
@@ -1114,58 +1093,6 @@
       return lista;
     }
 
-    function criarRecorteAltoContraste(canvasOrigem, sy, sh) {
-      const c = document.createElement("canvas");
-      c.width = canvasOrigem.width;
-      c.height = sh;
-      const ctx = c.getContext("2d");
-      ctx.drawImage(canvasOrigem, 0, sy, canvasOrigem.width, sh, 0, 0, c.width, c.height);
-      const img = ctx.getImageData(0, 0, c.width, c.height);
-      const d = img.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const bin = d[i] > 168 ? 255 : 0;
-        d[i] = d[i + 1] = d[i + 2] = bin;
-      }
-      ctx.putImageData(img, 0, 0);
-      return c;
-    }
-
-    async function executarOcrAlternativoSeNecessario(worker, blocosOcr, textoConsolidado) {
-      const chavePrevia = extrairChaveNfeValidada(textoConsolidado);
-      const totaisPrevios = extrairTotaisDanfe(textoConsolidado.split(/\r?\n/), textoConsolidado);
-      const precisaReforco = !chavePrevia.chave || chavePrevia.confiancaChave < 90 || totaisPrevios.valorTotalNf <= 0;
-
-      if (!precisaReforco || blocosOcr.length === 0) {
-        return "";
-      }
-
-      const textosExtra = [];
-      const primeiro = blocosOcr[0];
-      const hTopo = Math.min(primeiro.height, Math.round(primeiro.height * 0.55));
-      if (hTopo > 40) {
-        const recorteTopo = criarRecorteAltoContraste(primeiro, 0, hTopo);
-        const resTopo = await worker.recognize(recorteTopo, {}, { text: true });
-        if (resTopo.data && resTopo.data.text) textosExtra.push(resTopo.data.text);
-        recorteTopo.width = 1;
-        recorteTopo.height = 1;
-      }
-
-      if (totaisPrevios.valorTotalNf <= 0) {
-        const ultimo = blocosOcr[blocosOcr.length - 1];
-        const yBase = Math.max(0, Math.round(ultimo.height * 0.45));
-        const hBase = ultimo.height - yBase;
-        if (hBase > 40) {
-          const recorteBase = criarRecorteAltoContraste(ultimo, yBase, hBase);
-          const resBase = await worker.recognize(recorteBase, {}, { text: true });
-          if (resBase.data && resBase.data.text) textosExtra.push(resBase.data.text);
-          recorteBase.width = 1;
-          recorteBase.height = 1;
-        }
-      }
-
-      return textosExtra.join("\n");
-    }
-
     async function finalizarCapturaEProcessar() {
       if (faixasCapturadas.length === 0) return;
 
@@ -1177,59 +1104,67 @@
       document.getElementById("secProcessamento").style.display = "block";
 
       try {
-        // ETAPA 1-3: Reconstrução panorâmica de alta qualidade para visualização e PDF
-        marcarEtapa(1, "⏳ Montando...");
-        canvasVisualizacao = reconstruirCanvasCompleto(false, true);
-        resultadoNota.imagemVisualizacaoDataUrl = canvasVisualizacao.toDataURL("image/jpeg", 0.88);
+        // ETAPA 1: Monta a folha única do documento escaneado em fundo branco limpo
+        marcarEtapa(1, "⏳ Montando folha...");
+        canvasScanLimpo = unirIntervaloFaixas(faixasCapturadas, faixasCapturadas[0].canvas.width);
+        resultadoNota.imagemScanLimpoDataUrl = canvasScanLimpo.toDataURL("image/png");
         marcarEtapa(1, "✅ OK");
 
-        // ETAPA 4-5: Consolida faixas em no máximo 3 super-blocos OCR
-        marcarEtapa(2, "⏳ Consolidando...");
-        const blocosOcr = gerarBlocosConsolidadosParaOcr();
-        marcarEtapa(2, "✅ " + blocosOcr.length + " bloco(s)");
+        // ETAPA 2: OCR em no máximo 2 super-blocos (ultra rápido no celular)
+        const blocosOcr = [];
+        if (canvasScanLimpo.height <= 2400) {
+          blocosOcr.push({ canvas: canvasScanLimpo, offsetY: 0 });
+        } else {
+          const meioY = Math.floor(canvasScanLimpo.height / 2);
+          const sobrep = 80;
 
-        // ETAPA 6: OCR com worker pré-aquecido
-        marcarEtapa(3, "⏳ Lendo 0/" + blocosOcr.length + "...");
+          const cTop = document.createElement("canvas");
+          cTop.width = canvasScanLimpo.width;
+          cTop.height = meioY + sobrep;
+          cTop.getContext("2d").drawImage(canvasScanLimpo, 0, 0, cTop.width, cTop.height, 0, 0, cTop.width, cTop.height);
+
+          const cBot = document.createElement("canvas");
+          cBot.width = canvasScanLimpo.width;
+          cBot.height = canvasScanLimpo.height - meioY + sobrep;
+          cBot.getContext("2d").drawImage(canvasScanLimpo, 0, meioY - sobrep, cBot.width, cBot.height, 0, 0, cBot.width, cBot.height);
+
+          blocosOcr.push({ canvas: cTop, offsetY: 0 });
+          blocosOcr.push({ canvas: cBot, offsetY: meioY - sobrep });
+        }
+
+        marcarEtapa(2, "⏳ Lendo texto (" + blocosOcr.length + " bloco)...");
         const todasPalavras = [];
-        const textosPorBloco = [];
-        let offsetYAcumulado = 0;
-        const larguraRef = blocosOcr[0].width;
-
+        const textos = [];
         const worker = await preAquecerTesseract();
+
         for (let i = 0; i < blocosOcr.length; i++) {
-          marcarEtapa(3, "⏳ Lendo " + (i + 1) + "/" + blocosOcr.length + "...");
-          const cBloco = blocosOcr[i];
-          const res = await worker.recognize(cBloco, {}, { blocks: true, text: true });
-          const palavrasBloco = extrairPalavrasTesseractV5(res.data, offsetYAcumulado);
-          todasPalavras.push(...palavrasBloco);
-          if (res.data && res.data.text) {
-            textosPorBloco.push(res.data.text);
+          marcarEtapa(2, "⏳ Lendo " + (i + 1) + "/" + blocosOcr.length + "...");
+          const blk = blocosOcr[i];
+          const res = await worker.recognize(blk.canvas, {}, { blocks: true, text: true });
+          todasPalavras.push(...extrairPalavrasTesseractV5(res.data, blk.offsetY));
+          if (res.data && res.data.text) textos.push(res.data.text);
+          if (blk.canvas !== canvasScanLimpo) {
+            blk.canvas.width = 1;
+            blk.canvas.height = 1;
           }
-          offsetYAcumulado += cBloco.height;
         }
 
-        let textoConsolidado = textosPorBloco.join("\n");
-        const textoAlternativo = await executarOcrAlternativoSeNecessario(worker, blocosOcr, textoConsolidado);
-        if (textoAlternativo) {
-          textoConsolidado = textoConsolidado + "\n" + textoAlternativo;
-        }
+        const textoConsolidado = textos.join("\n");
+        marcarEtapa(2, "✅ " + todasPalavras.length + " palavras");
 
-        marcarEtapa(3, "✅ " + todasPalavras.length + " palavras");
+        // ETAPA 3: Extração rápida de campos, itens e valores
+        marcarEtapa(3, "⏳ Extraindo itens...");
+        interpretarDanfeCompleta(todasPalavras, textoConsolidado, canvasScanLimpo.width, canvasScanLimpo.height);
+        marcarEtapa(3, "✅ " + resultadoNota.itens.length + " item(ns)");
 
-        // ETAPA 7-8: Interpretação estruturada DANFE
-        marcarEtapa(4, "⏳ Analisando DANFE...");
-        interpretarDanfeCompleta(todasPalavras, textoConsolidado, larguraRef, offsetYAcumulado);
-        marcarEtapa(4, "✅ " + resultadoNota.itens.length + " item(ns)");
-
-        // ETAPA 10: Geração do PDF
-        marcarEtapa(5, "⏳ Gerando PDF...");
+        // ETAPA 4: Redigitalização da DANFE limpa em formato digital + PDF
+        marcarEtapa(4, "⏳ Redigitalizando...");
+        renderizarDanfeRedigitalizadaCanvas();
         gerarPdfDaNotaReconstruida();
-        marcarEtapa(5, "✅ PDF Pronto");
+        marcarEtapa(4, "✅ Pronto");
 
-        // Libera canvases temporários de captura após montagem final
         liberarMemoriaTemporaria();
-
-        setTimeout(abrirTelaConferencia, 200);
+        setTimeout(abrirTelaConferencia, 150);
       } catch (erro) {
         alert("Erro durante o processamento da nota: " + erro.message);
         reiniciarScannerCompleto();
@@ -1237,7 +1172,147 @@
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // ETAPA 7 & 8: PARSER HÍBRIDO DANFE (POSICIONAL + TEXTUAL + MATEMÁTICA)
+    // 4. REDIGITALIZAÇÃO DA DANFE (RECONSTRUÇÃO DIGITAL LIMPA DA NOTA)
+    // ════════════════════════════════════════════════════════════════════
+
+    function renderizarDanfeRedigitalizadaCanvas() {
+      const dados = obterDadosConferenciaAtuais();
+      const itens = resultadoNota.itens || [];
+      const w = 1000;
+      const alturaItens = Math.max(140, itens.length * 38 + 90);
+      const h = 430 + alturaItens + 180;
+
+      canvasDanfeRedigitalizada.width = w;
+      canvasDanfeRedigitalizada.height = h;
+      const ctx = canvasDanfeRedigitalizada.getContext("2d");
+
+      // Fundo branco de documento oficial
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, w, h);
+
+      // Moldura externa
+      ctx.strokeStyle = "#111827";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(24, 24, w - 48, h - 48);
+
+      // Canhoto superior
+      ctx.strokeRect(24, 24, w - 48, 68);
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 13px Arial";
+      ctx.fillText("RECEBEMOS DE " + (dados.fornecedor || "EMITENTE NÃO IDENTIFICADO").toUpperCase() + " OS PRODUTOS CONSTANTES DA NOTA FISCAL INDICADA AO LADO", 36, 48);
+      ctx.font = "12px Arial";
+      ctx.fillText("DATA DE RECEBIMENTO: ____/____/______      IDENTIFICAÇÃO E ASSINATURA DO RECEBEDOR: ___________________________", 36, 76);
+
+      // Bloco principal DANFE + Emitente + Chave
+      const topDanfe = 104;
+      ctx.strokeRect(24, topDanfe, 430, 145);
+      ctx.strokeRect(454, topDanfe, 160, 145);
+      ctx.strokeRect(614, topDanfe, w - 638, 145);
+
+      ctx.font = "bold 11px Arial";
+      ctx.fillStyle = "#4B5563";
+      ctx.fillText("IDENTIFICAÇÃO DO EMITENTE", 36, topDanfe + 20);
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 17px Arial";
+      ctx.fillText((dados.fornecedor || "FORNECEDOR A CONFERIR").slice(0, 34), 36, topDanfe + 48);
+      ctx.font = "13px Arial";
+      if (resultadoNota.cnpjEmitente) {
+        ctx.fillText("CNPJ: " + resultadoNota.cnpjEmitente, 36, topDanfe + 74);
+      }
+      if (resultadoNota.dataEmissao) {
+        ctx.fillText("Emissão: " + resultadoNota.dataEmissao, 36, topDanfe + 98);
+      }
+
+      // Quadro central DANFE
+      ctx.font = "bold 22px Arial";
+      ctx.fillText("DANFE", 495, topDanfe + 32);
+      ctx.font = "10px Arial";
+      ctx.fillText("DOCUMENTO AUXILIAR DA", 468, topDanfe + 50);
+      ctx.fillText("NOTA FISCAL ELETRÔNICA", 467, topDanfe + 63);
+      ctx.font = "bold 14px Arial";
+      ctx.fillText("Nº " + (dados.numNota || "000000"), 474, topDanfe + 95);
+      ctx.font = "13px Arial";
+      ctx.fillText("SÉRIE: " + (resultadoNota.serie || "1"), 474, topDanfe + 118);
+
+      // Quadro Chave de Acesso
+      ctx.font = "bold 11px Arial";
+      ctx.fillStyle = "#4B5563";
+      ctx.fillText("CHAVE DE ACESSO", 626, topDanfe + 20);
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 13px monospace";
+      const chaveFormatada = (dados.chave || "CHAVE NÃO VALIDADA").replace(/(\d{4})(?=\d)/g, "$1 ");
+      ctx.fillText(chaveFormatada.slice(0, 29), 626, topDanfe + 52);
+      ctx.fillText(chaveFormatada.slice(29), 626, topDanfe + 72);
+      ctx.font = "11px Arial";
+      ctx.fillStyle = "#374151";
+      ctx.fillText("Consulta de autenticidade no portal nacional da NF-e", 626, topDanfe + 108);
+
+      // Bloco Cálculo do Imposto / Valor Total
+      const topTotais = 262;
+      ctx.strokeStyle = "#111827";
+      ctx.strokeRect(24, topTotais, w - 48, 66);
+      ctx.fillStyle = "#4B5563";
+      ctx.font = "bold 11px Arial";
+      ctx.fillText("CÁLCULO DO IMPOSTO / VALOR TOTAL DA NOTA", 36, topTotais + 20);
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 20px Arial";
+      ctx.fillText("VALOR TOTAL DA NOTA: R$ " + Number(dados.valorTotal || 0).toFixed(2), 36, topTotais + 50);
+
+      // Tabela de Produtos / Serviços Redigitalizada
+      const topTabela = 342;
+      ctx.strokeRect(24, topTabela, w - 48, alturaItens);
+      ctx.fillStyle = "#F3F4F6";
+      ctx.fillRect(25, topTabela + 1, w - 50, 34);
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 12px Arial";
+      ctx.fillText("CÓD.", 36, topTabela + 23);
+      ctx.fillText("DESCRIÇÃO DO PRODUTO / SERVIÇO", 120, topTabela + 23);
+      ctx.fillText("UN", 620, topTabela + 23);
+      ctx.fillText("QTD", 680, topTabela + 23);
+      ctx.fillText("VL. UNIT.", 765, topTabela + 23);
+      ctx.fillText("VL. TOTAL", 875, topTabela + 23);
+
+      let yRow = topTabela + 58;
+      ctx.font = "13px Arial";
+      if (itens.length === 0) {
+        ctx.fillStyle = "#6B7280";
+        ctx.fillText("Nenhum item estruturado extraído — confira o scan limpo.", 36, yRow);
+      } else {
+        itens.forEach(function(it) {
+          ctx.fillStyle = "#111827";
+          ctx.fillText(String(it.codigo || "-").slice(0, 10), 36, yRow);
+          ctx.fillText(String(it.produto || "-").slice(0, 52), 120, yRow);
+          ctx.fillText(String(it.unidade || "UN"), 620, yRow);
+          ctx.fillText(String(it.quantidade ?? 0), 680, yRow);
+          ctx.fillText("R$ " + Number(it.valorUnitario || 0).toFixed(2), 765, yRow);
+          ctx.fillText("R$ " + Number(it.valorTotal || 0).toFixed(2), 875, yRow);
+
+          ctx.strokeStyle = "#E5E7EB";
+          ctx.beginPath();
+          ctx.moveTo(24, yRow + 11);
+          ctx.lineTo(w - 24, yRow + 11);
+          ctx.stroke();
+          yRow += 36;
+        });
+      }
+
+      // Rodapé de Auditoria SPX
+      const topRodape = topTabela + alturaItens + 18;
+      ctx.strokeStyle = "#111827";
+      ctx.strokeRect(24, topRodape, w - 48, 120);
+      ctx.fillStyle = "#EE4D2D";
+      ctx.font = "bold 13px Arial";
+      ctx.fillText("DOCUMENTO REDIGITALIZADO AUTOMATICAMENTE PELO SCANNER SPX", 36, topRodape + 26);
+      ctx.fillStyle = "#374151";
+      ctx.font = "12px Arial";
+      ctx.fillText("Itens identificados: " + itens.length + "   |   Confiança OCR geral: " + resultadoNota.confiancaOcr + "%", 36, topRodape + 52);
+      ctx.fillText("Texto integral reconhecido da nota preservado no registro e no PDF de auditoria.", 36, topRodape + 76);
+
+      resultadoNota.imagemVisualizacaoDataUrl = canvasDanfeRedigitalizada.toDataURL("image/png");
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // 5. PARSER HÍBRIDO RÁPIDO DANFE (ITENS, VALORES, CHAVE E EMITENTE)
     // ════════════════════════════════════════════════════════════════════
 
     function agruparPalavrasEmLinhas(palavras) {
@@ -1246,7 +1321,7 @@
 
       const linhas = [];
       ordenadas.forEach(function(p) {
-        const tolY = Math.max(11, p.height * 0.7);
+        const tolY = Math.max(12, p.height * 0.75);
         let linhaAlvo = null;
         for (let i = linhas.length - 1; i >= Math.max(0, linhas.length - 5); i--) {
           if (Math.abs(linhas[i].yMedio - p.y) <= tolY) {
@@ -1280,12 +1355,10 @@
       const { fornecedor, cnpjEmitente, confiancaForn } = extrairEmitenteSemantico(linhasTexto);
       const totaisInfo = extrairTotaisDanfe(linhasTexto, textoBruto);
 
-      let itensExtraidos = extrairTabelaProdutosPosicional(linhasPosicionais, larguraImg, totaisInfo.valorTotalNf);
-      if (itensExtraidos.length === 0) {
-        itensExtraidos = extrairItensPorRegexDanfe(linhasTexto, totaisInfo.valorTotalNf);
-      }
-
-      itensExtraidos = desduplicarItens(itensExtraidos);
+      // Extração combinada (posicional + âncora matemática na linha) para capturar todos os itens rapidamente
+      const itensPos = extrairTabelaProdutosPosicional(linhasPosicionais, larguraImg, totaisInfo.valorTotalNf);
+      const itensRegex = extrairItensPorRegexDanfe(linhasPosicionais.map(l => l.texto).concat(linhasTexto), totaisInfo.valorTotalNf);
+      let itensExtraidos = desduplicarItens(itensPos.length >= itensRegex.length ? itensPos.concat(itensRegex) : itensRegex.concat(itensPos));
 
       const somaItens = itensExtraidos.reduce((acc, it) => acc + it.valorTotal, 0);
       let valorTotalFinal = totaisInfo.valorTotalNf;
@@ -1337,7 +1410,8 @@
           itens: Math.round(confItens)
         },
         divergencias: divergencias,
-        imagemVisualizacaoDataUrl: resultadoNota.imagemVisualizacaoDataUrl,
+        imagemScanLimpoDataUrl: resultadoNota.imagemScanLimpoDataUrl,
+        imagemVisualizacaoDataUrl: "",
         imagemComprimidaBase64: "",
         pdfBase64: ""
       };
@@ -1429,7 +1503,6 @@
         } else if (numeroNota === numLido) {
           conf = 99;
         } else {
-          // Ambiguidade entre número lido na NF e chave: mantém leitura principal e sinaliza conferência
           conf = 62;
         }
       }
@@ -1448,7 +1521,7 @@
       let cnpj = "";
       let conf = 0;
 
-      for (let i = 0; i < Math.min(28, linhasTexto.length); i++) {
+      for (let i = 0; i < Math.min(30, linhasTexto.length); i++) {
         const txt = linhasTexto[i];
         const up = txt.toUpperCase();
 
@@ -1470,7 +1543,6 @@
 
         if (!fornecedor && txt.length >= 5 && /[A-Z]{3,}/.test(up) && !/^\d+$/.test(txt)) {
           fornecedor = txt.replace(/[^A-Z0-9\s.&-]/gi, "").trim().slice(0, 75);
-          // Marca baixa confiança se parecer fragmento truncado (ex.: "ESA E O")
           const palavrasCurta = fornecedor.split(/\s+/).filter(Boolean);
           const pareceFragmento = fornecedor.length < 8 || (palavrasCurta.length >= 2 && palavrasCurta[palavrasCurta.length - 1].length === 1);
           conf = pareceFragmento ? 42 : 84;
@@ -1523,24 +1595,22 @@
     function extrairTabelaProdutosPosicional(linhasPos, larguraImg, valorTotalNf) {
       let colX = {
         codigo: larguraImg * 0.06,
-        descricao: larguraImg * 0.22,
+        descricao: larguraImg * 0.20,
         ncm: larguraImg * 0.48,
-        un: larguraImg * 0.60,
-        qtd: larguraImg * 0.67,
-        vlUnit: larguraImg * 0.77,
-        vlTotal: larguraImg * 0.89
+        un: larguraImg * 0.59,
+        qtd: larguraImg * 0.66,
+        vlUnit: larguraImg * 0.76,
+        vlTotal: larguraImg * 0.88
       };
 
-      let dentroTabela = false;
       const itens = [];
-      const termosFim = /(?:C[AÁ]LCULO\s+DO\s+IMPOSTO|BASE\s+DE\s+C[AÁ]LCULO|VALOR\s+DO\s+ICMS|VALOR\s+TOTAL\s+DA\s+NOTA|VALOR\s+TOTAL\s+DOS\s+PRODUTOS|DADOS\s+ADICIONAIS|INFORMA[CÇ][OÕ]ES\s+COMPLEMENTARES|ISSQN)/i;
+      const termosBloqueio = /(?:VALOR\s+TOTAL\s+DA\s+NOTA|VALOR\s+TOTAL\s+DOS\s+PRODUTOS|SUBTOTAL|FRETE|DESCONTO|ICMS|IPI|PIS|COFINS|BASE\s+DE\s+C[AÁ]LCULO|TRIBUTOS|DUPLICATA|PARCELA|RECEBEMOS|CHAVE\s+DE\s+ACESSO)/i;
 
       for (let i = 0; i < linhasPos.length; i++) {
         const linha = linhasPos[i];
         const up = linha.texto.toUpperCase();
 
         if (/DADOS\s+DO\s+PRODUTO|DESCRI[CÇ][AÃ]O\s+DO\s+PRODUTO/.test(up) || (/DESCRI[CÇ][AÃ]O/.test(up) && /QTD|QUANT|UNIT/.test(up))) {
-          dentroTabela = true;
           linha.palavras.forEach(function(w) {
             const wu = w.text.toUpperCase();
             if (/C[OÓ]D/.test(wu)) colX.codigo = w.x;
@@ -1554,10 +1624,7 @@
           continue;
         }
 
-        if (dentroTabela && termosFim.test(up)) {
-          dentroTabela = false;
-          continue;
-        }
+        if (termosBloqueio.test(up)) continue;
 
         const tokensDesc = [];
         const tokensNum = [];
@@ -1566,15 +1633,16 @@
 
         linha.palavras.forEach(function(w) {
           const cx = w.x + w.width / 2;
-          const ehDecimal = /^\d{1,3}(?:\.\d{3})*,\d{2,4}$/.test(w.text) || /^\d+[.,]\d{2,4}$/.test(w.text);
+          const ehNum = /^\d{1,3}(?:\.\d{3})*,\d{2,4}$/.test(w.text) || /^\d+[.,]\d{2,4}$/.test(w.text) || /^\d{1,4}$/.test(w.text);
 
           if (cx < colX.descricao - 10 && /^[A-Z0-9.-]{2,16}$/i.test(w.text)) {
             codigoProd = w.text;
-          } else if (/^(UN|PC|PÇ|CX|KG|LT|PAR|KT|FD|RL|MT)$/i.test(w.text)) {
+          } else if (/^(UN|UND|PC|PÇ|CX|KG|LT|PAR|KT|FD|RL|MT)$/i.test(w.text)) {
             unidade = w.text.toUpperCase();
-          } else if (ehDecimal && cx >= colX.un - 30) {
-            tokensNum.push({ valor: parseNumeroBr(w.text), x: cx });
-          } else if (cx >= colX.descricao - 25 && cx < colX.ncm + 35) {
+          } else if (ehNum && cx >= colX.un - 35) {
+            const val = parseNumeroBr(w.text);
+            if (!isNaN(val)) tokensNum.push({ valor: val, x: cx, temDecimal: /[.,]/.test(w.text) });
+          } else if (cx >= colX.descricao - 25 && cx < colX.ncm + 45) {
             if (!/^\d{8}$/.test(w.text) && !/^[1567]\d{3}$/.test(w.text)) {
               tokensDesc.push(w.text);
             }
@@ -1582,8 +1650,8 @@
         });
 
         const desc = tokensDesc.join(" ").replace(/\s+/g, " ").trim();
-        if (desc.length < 3 || tokensNum.length < 2) continue;
-        if (/(?:TOTAL|SUBTOTAL|FRETE|DESCONTO|ICMS|IPI|PIS|COFINS|BASE|TRIBUTOS|DUPLICATA|PARCELA|RECEBEMOS)/i.test(desc)) continue;
+        const decimais = tokensNum.filter(t => t.temDecimal);
+        if (desc.length < 3 || decimais.length < 2) continue;
 
         tokensNum.sort((a, b) => a.x - b.x);
         let qtd = 1;
@@ -1596,8 +1664,8 @@
           vlUnit = tokensNum[n - 2].valor;
           vlTotal = tokensNum[n - 1].valor;
         } else {
-          const a = tokensNum[0].valor;
-          const b = tokensNum[1].valor;
+          const a = decimais[0].valor;
+          const b = decimais[1].valor;
           if (a > 0 && b > a && Math.abs(Math.round(b / a) * a - b) < 0.05) {
             qtd = Math.round(b / a);
             vlUnit = a;
@@ -1622,7 +1690,7 @@
           quantidade: Number(qtd.toFixed(3)),
           valorUnitario: Number(vlUnit.toFixed(4)),
           valorTotal: Number(vlTotal.toFixed(2)),
-          confianca: Math.round(linha.confMedia || 80),
+          confianca: Math.round(linha.confMedia || 84),
           statusValidacao: statusValidacao
         });
       }
@@ -1632,11 +1700,11 @@
 
     function extrairItensPorRegexDanfe(linhasTexto, valorTotalNf) {
       const itens = [];
-      const bloqueio = /(?:VALOR\s+TOTAL|SUBTOTAL|FRETE|DESCONTO|ICMS|IPI|PIS|COFINS|BASE\s+DE\s+C[AÁ]LCULO|TRIBUTOS|DUPLICATA|PARCELA|RECEBEMOS)/i;
+      const bloqueio = /(?:VALOR\s+TOTAL|SUBTOTAL|FRETE|DESCONTO|ICMS|IPI|PIS|COFINS|BASE\s+DE\s+C[AÁ]LCULO|TRIBUTOS|DUPLICATA|PARCELA|RECEBEMOS|CHAVE\s+DE\s+ACESSO)/i;
 
       linhasTexto.forEach(function(linha) {
         if (bloqueio.test(linha)) return;
-        const m3 = linha.match(/^(.{4,70}?)\s+(\d+(?:[.,]\d{1,3})?)\s+(\d{1,3}(?:\.\d{3})*,\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2})$/);
+        const m3 = linha.match(/^(.{3,75}?)\s+(?:UN|UND|PC|PÇ|CX|KG|LT|PAR|KT)?\s*(\d+(?:[.,]\d{1,3})?)\s+(\d{1,3}(?:\.\d{3})*,\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2})$/i);
         if (m3) {
           const desc = m3[1].replace(/^[\d.\-\s]+/, "").trim();
           const qtd = parseNumeroBr(m3[2]) || 1;
@@ -1652,7 +1720,7 @@
               quantidade: qtd,
               valorUnitario: vUnit,
               valorTotal: vTot,
-              confianca: 78,
+              confianca: 80,
               statusValidacao: ok ? "OK" : "CONFERIR"
             });
           }
@@ -1673,7 +1741,7 @@
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // ETAPA 10: PDF COMPROVANTE SPX + DOCUMENTO ORIGINAL RECONSTRUÍDO
+    // 6. PDF COM COMPROVANTE + DANFE REDIGITALIZADA + SCAN LIMPO
     // ════════════════════════════════════════════════════════════════════
 
     function obterDadosConferenciaAtuais() {
@@ -1690,7 +1758,10 @@
       const dados = obterDadosConferenciaAtuais();
       const dataStr = resultadoNota.dataEmissao || new Date().toLocaleDateString("pt-BR");
 
-      // Página 1: Comprovante Estruturado SPX
+      // Atualiza a DANFE redigitalizada com eventuais edições manuais do conferente
+      renderizarDanfeRedigitalizadaCanvas();
+
+      // Página 1: Comprovante Oficial SPX + Itens
       pdf.setFillColor(238, 77, 45);
       pdf.rect(12, 10, 186, 11, "F");
       pdf.setTextColor(255, 255, 255);
@@ -1703,7 +1774,7 @@
       let y = 28;
       const linhasCab = [
         "NF: " + (dados.numNota || "-"),
-        "FORNECEDOR: " + (dados.fornecedor || "-") + (resultadoNota.confiancaCampos.fornecedor < 60 ? " [CONFERIR]" : ""),
+        "FORNECEDOR: " + (dados.fornecedor || "-"),
         "CHAVE NF-e: " + (dados.chave || "Não informada"),
         "DATA: " + dataStr,
         "RECEBIDO POR: Conferente SPX",
@@ -1739,38 +1810,47 @@
         y += 4.8;
       });
 
-      // Página 2: Documento Original / Reconstruído para Auditoria
-      if (resultadoNota.imagemVisualizacaoDataUrl && canvasVisualizacao.width > 1 && canvasVisualizacao.height > 1) {
+      // Página 2: DANFE Redigitalizada Limpa
+      if (resultadoNota.imagemVisualizacaoDataUrl) {
+        pdf.addPage();
+        const wD = canvasDanfeRedigitalizada.width;
+        const hD = canvasDanfeRedigitalizada.height;
+        const rD = Math.min(190 / wD, 278 / hD);
+        const drawWD = wD * rD;
+        const drawHD = hD * rD;
+        pdf.addImage(resultadoNota.imagemVisualizacaoDataUrl, "PNG", (210 - drawWD) / 2, 9, drawWD, drawHD);
+      }
+
+      // Página 3: Scan Preto & Branco Limpo para Auditoria
+      if (resultadoNota.imagemScanLimpoDataUrl && canvasScanLimpo.width > 1 && canvasScanLimpo.height > 1) {
         pdf.addPage();
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(10);
-        pdf.text("DOCUMENTO RECONSTRUÍDO PARA AUDITORIA", 14, 12);
+        pdf.text("DOCUMENTO ESCANEADO (AUDITORIA)", 14, 12);
 
-        const wImg = canvasVisualizacao.width;
-        const hImg = canvasVisualizacao.height;
+        const wImg = canvasScanLimpo.width;
+        const hImg = canvasScanLimpo.height;
         const ratio = Math.min(186 / wImg, 268 / hImg);
         const drawW = wImg * ratio;
         const drawH = hImg * ratio;
-        const offsetX = (210 - drawW) / 2;
-
-        pdf.addImage(resultadoNota.imagemVisualizacaoDataUrl, "JPEG", offsetX, 16, drawW, drawH);
+        pdf.addImage(resultadoNota.imagemScanLimpoDataUrl, "PNG", (210 - drawW) / 2, 16, drawW, drawH);
       }
 
       const canvasEnvio = document.createElement("canvas");
-      const maxLargEnvio = 1100;
-      const escEnvio = canvasVisualizacao.width > maxLargEnvio ? (maxLargEnvio / canvasVisualizacao.width) : 1;
-      canvasEnvio.width = Math.max(1, Math.round(canvasVisualizacao.width * escEnvio));
-      canvasEnvio.height = Math.max(1, Math.round(canvasVisualizacao.height * escEnvio));
-      canvasEnvio.getContext("2d").drawImage(canvasVisualizacao, 0, 0, canvasEnvio.width, canvasEnvio.height);
+      const maxLargEnvio = 1000;
+      const escEnvio = canvasDanfeRedigitalizada.width > maxLargEnvio ? (maxLargEnvio / canvasDanfeRedigitalizada.width) : 1;
+      canvasEnvio.width = Math.max(1, Math.round(canvasDanfeRedigitalizada.width * escEnvio));
+      canvasEnvio.height = Math.max(1, Math.round(canvasDanfeRedigitalizada.height * escEnvio));
+      canvasEnvio.getContext("2d").drawImage(canvasDanfeRedigitalizada, 0, 0, canvasEnvio.width, canvasEnvio.height);
 
-      resultadoNota.imagemComprimidaBase64 = canvasEnvio.toDataURL("image/jpeg", 0.72).split(",")[1];
+      resultadoNota.imagemComprimidaBase64 = canvasEnvio.toDataURL("image/jpeg", 0.82).split(",")[1];
       resultadoNota.pdfBase64 = pdf.output("datauristring").split(",")[1];
       canvasEnvio.width = 1;
       canvasEnvio.height = 1;
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // QUALITY GATE + TELA DE CONFERÊNCIA EDITÁVEL + APPS SCRIPT
+    // 7. QUALITY GATE + CONFERÊNCIA + ENVIO PARA O APPS SCRIPT
     // ════════════════════════════════════════════════════════════════════
 
     function validarQualidadeAntesDoEnvio() {
@@ -1794,7 +1874,6 @@
         bloqueios.push("🔴 CHAVE NF-e NÃO VALIDADA — dígito verificador inválido.");
       }
       if (valorTotal <= 0) bloqueios.push("Valor total da NF deve ser maior que R$ 0,00.");
-      if (!resultadoNota.imagemVisualizacaoDataUrl) bloqueios.push("Documento digitalizado ausente.");
 
       const pendenciasConferencia = [];
       if (itensInconsistentes > 0) {
@@ -1804,7 +1883,7 @@
         pendenciasConferencia.push("Divergência entre soma dos itens e valor total da NF.");
       }
       if (resultadoNota.confiancaCampos.fornecedor > 0 && resultadoNota.confiancaCampos.fornecedor < 60 && fornecedor.length < 8) {
-        pendenciasConferencia.push("Conferir fornecedor (baixa confiança OCR).");
+        pendenciasConferencia.push("Conferir fornecedor.");
       }
 
       let classificacao = "LIBERADO";
@@ -1831,9 +1910,9 @@
       document.getElementById("secConferencia").style.display = "block";
 
       document.getElementById("txtResumoAreas").textContent =
-        "Reconstruído a partir de área(s) • " + resultadoNota.totalPalavrasLidas + " palavras lidas";
+        "DANFE redigitalizada • " + resultadoNota.totalPalavrasLidas + " palavras lidas • " + resultadoNota.itens.length + " item(ns)";
 
-      document.getElementById("txtOcrBrutoDebug").value = resultadoNota.textoBrutoCompleto || "(Nenhum texto detectado — aproxime mais a câmera da nota)";
+      document.getElementById("txtOcrBrutoDebug").value = resultadoNota.textoBrutoCompleto || "(Nenhum texto detectado)";
 
       document.getElementById("editNumNota").value = resultadoNota.numeroNota;
       document.getElementById("editFornecedor").value = resultadoNota.fornecedor;
@@ -1866,7 +1945,7 @@
       if (itens.length === 0) {
         box.innerHTML =
           '<div style="font-size:13px;color:#B45309;background:#FFFBEB;padding:10px;border-radius:8px;border:1px solid #FCD34D">' +
-          'Nenhum item extraído automaticamente. Toque em <strong>+ Adicionar item</strong> ou refaça a captura mais próximo da tabela.' +
+          'Nenhum item extraído automaticamente. Toque em <strong>+ Adicionar item</strong> ou refaça o escaneamento mais próximo da tabela.' +
           '</div>';
         document.getElementById("txtSomaItens").textContent = "R$ 0,00";
         return;
@@ -1942,22 +2021,15 @@
       const gate = validarQualidadeAntesDoEnvio();
       const numNota = (document.getElementById("editNumNota")?.value ?? "").trim();
       const fornecedor = (document.getElementById("editFornecedor")?.value ?? "").trim();
-      const chave = (document.getElementById("editChave")?.value ?? "").replace(/\D/g, "");
       const valorTotal = parseFloat(document.getElementById("editValorTotal")?.value) || 0;
       const somaItens = gate.somaItens;
 
       document.getElementById("txtSomaItens").textContent = "R$ " + somaItens.toFixed(2);
 
-      // Destaque visual apenas nos campos que exigem atenção do operador
-      const elNum = document.getElementById("editNumNota");
-      const elForn = document.getElementById("editFornecedor");
-      const elChave = document.getElementById("editChave");
-      const elTot = document.getElementById("editValorTotal");
-
-      elNum.classList.toggle("campo-atencao", !numNota || resultadoNota.confiancaCampos.numeroNota < 75);
-      elForn.classList.toggle("campo-atencao", !fornecedor || resultadoNota.confiancaCampos.fornecedor < 65);
-      elChave.classList.toggle("campo-atencao", !gate.chaveOk);
-      elTot.classList.toggle("campo-atencao", valorTotal <= 0 || resultadoNota.confiancaCampos.valorTotal < 75);
+      document.getElementById("editNumNota").classList.toggle("campo-atencao", !numNota || resultadoNota.confiancaCampos.numeroNota < 75);
+      document.getElementById("editFornecedor").classList.toggle("campo-atencao", !fornecedor || resultadoNota.confiancaCampos.fornecedor < 65);
+      document.getElementById("editChave").classList.toggle("campo-atencao", !gate.chaveOk);
+      document.getElementById("editValorTotal").classList.toggle("campo-atencao", valorTotal <= 0 || resultadoNota.confiancaCampos.valorTotal < 75);
 
       const boxDiv = document.getElementById("alertaDivergencia");
       if (valorTotal > 0 && somaItens > 0 && Math.abs(valorTotal - somaItens) > 0.25) {
@@ -2010,7 +2082,7 @@
         banner.className = "gate-banner gate-liberado";
         banner.innerHTML =
           '<div class="gate-title">🟢 LIBERADO — DADOS VÁLIDOS PARA ENVIO</div>' +
-          '<div>✓ Documento válido • ✓ Chave validada • ✓ Valores consistentes</div>' + scoresHtml;
+          '<div>✓ Documento escaneado • ✓ Chave validada • ✓ Valores consistentes</div>' + scoresHtml;
         btnEnvio.disabled = envioEmAndamento || envioConcluido;
         btnEnvio.textContent = envioConcluido ? "✓ ENVIO CONCLUÍDO" : (envioEmAndamento ? "ENVIANDO..." : "🚀 ENVIAR");
       }
@@ -2018,9 +2090,20 @@
       return gate.permitirEnvio;
     }
 
-    function abrirModalDocumento() {
-      document.getElementById("imgDocumentoModal").src = resultadoNota.imagemVisualizacaoDataUrl;
+    function abrirModalDocumento(modo) {
+      alternarAbaModal(modo || "redigitalizado");
       document.getElementById("modalDocumento").style.display = "flex";
+    }
+
+    function alternarAbaModal(modo) {
+      if (modo === "scan") {
+        document.getElementById("tituloModalDoc").textContent = "🔍 Documento Escaneado (Preto & Branco Limpo)";
+        document.getElementById("imgDocumentoModal").src = resultadoNota.imagemScanLimpoDataUrl || resultadoNota.imagemVisualizacaoDataUrl;
+      } else {
+        renderizarDanfeRedigitalizadaCanvas();
+        document.getElementById("tituloModalDoc").textContent = "📄 DANFE Redigitalizada Limpa";
+        document.getElementById("imgDocumentoModal").src = resultadoNota.imagemVisualizacaoDataUrl;
+      }
     }
 
     function fecharModalDocumento() {
@@ -2080,7 +2163,7 @@
           imagemDigitalizadaBase64: resultadoNota.imagemComprimidaBase64,
           statusProcessamento: "CONFERENCIA_SCANNER_OK",
           divergencias: resultadoNota.divergencias,
-          areasCapturadas: resultadoNota.areasCapturadas || MAX_FAIXAS_CAPTURA
+          areasCapturadas: MAX_FAIXAS_CAPTURA
         };
 
         if (window.opener && !window.opener.closed) {
@@ -2092,7 +2175,7 @@
           envioConcluido = true;
           btnEnvio.textContent = "✓ ENVIO CONCLUÍDO";
           statusEl.className = "alert-box alert-ok";
-          statusEl.textContent = "✅ Dados estruturados, imagem e PDF enviados para o Apps Script!";
+          statusEl.textContent = "✅ Dados estruturados, DANFE redigitalizada e PDF enviados para o Apps Script!";
           statusEl.style.display = "block";
           setTimeout(function() { window.close(); }, 650);
           return;
