@@ -2,388 +2,368 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SPX | Scanner de Nota Fiscal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>SPX | Scanner Mobile NF</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <style>
+    :root {
+      --spx-orange: #EE4D2D;
+      --bg: #F4F5F7;
+      --card: #FFFFFF;
+      --text: #181C24;
+      --muted: #6B7280;
+      --border: #E5E7EB;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; background: #F3F4F6; color: #111827; padding: 14px; }
-    .container { max-width: 740px; margin: 0 auto; }
-    .header { background: linear-gradient(90deg, #181C24 0%, #262C3A 55%, #EE4D2D 100%); color: #fff; padding: 16px; border-radius: 10px; margin-bottom: 14px; }
-    .header h1 { font-size: 18px; margin-bottom: 4px; }
-    .header p { font-size: 12px; opacity: 0.9; }
-    .card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); border: 1px solid #E5E7EB; }
-    .card h2 { font-size: 14px; margin-bottom: 10px; color: #181C24; }
-    label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; color: #374151; }
-    input, select { width: 100%; padding: 9px; border: 1px solid #D1D5DB; border-radius: 7px; font-size: 13px; margin-bottom: 10px; }
-    input:focus, select:focus { outline: none; border-color: #EE4D2D; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
-    video, canvas { width: 100%; border: 1px solid #E5E7EB; border-radius: 8px; background: #111827; margin-top: 8px; max-height: 360px; object-fit: contain; }
-    canvas { background: #fff; display: none; }
-    .btn { width: 100%; padding: 11px; border: none; border-radius: 7px; font-weight: 700; font-size: 13px; cursor: pointer; margin-top: 6px; }
-    .btn-spx { background: #EE4D2D; color: #fff; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); padding-bottom: 24px; }
+
+    .topbar {
+      background: #FFFFFF;
+      border-bottom: 3px solid var(--spx-orange);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge { background: var(--spx-orange); color: #fff; font-weight: 800; font-size: 12px; padding: 4px 8px; border-radius: 6px; }
+    .topbar h1 { font-size: 15px; font-weight: 800; }
+
+    .wrap { max-width: 600px; margin: 0 auto; padding: 12px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+
+    .camera-box {
+      position: relative;
+      width: 100%;
+      background: #111827;
+      border-radius: 12px;
+      overflow: hidden;
+      min-height: 290px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    video, canvas { width: 100%; max-height: 420px; object-fit: contain; display: block; }
+    canvas { display: none; background: #fff; }
+    .guia-doc {
+      position: absolute;
+      inset: 14px;
+      border: 2px dashed rgba(238, 77, 45, 0.85);
+      border-radius: 10px;
+      pointer-events: none;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-spx { background: var(--spx-orange); color: #fff; }
     .btn-dark { background: #181C24; color: #fff; }
-    .btn-gray { background: #4B5563; color: #fff; }
-    .btn:disabled { background: #9CA3AF; cursor: not-allowed; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
-    th, td { border: 1px solid #E5E7EB; padding: 6px; text-align: left; }
-    th { background: #F9FAFB; }
-    .status { margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px; display: none; white-space: pre-line; }
+    .btn-outline { background: #fff; color: var(--text); border: 1.5px solid var(--border); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    select { width: 100%; padding: 10px; border: 1.5px solid #D1D5DB; border-radius: 10px; font-size: 13px; margin-top: 8px; background: #fff; }
+
+    .status {
+      margin-top: 10px;
+      padding: 11px;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.45;
+      display: none;
+    }
+    .info { background: #FFF2EE; color: #9A3412; border: 1px solid #FDBA74; }
     .ok { background: #DCFCE7; color: #166534; border: 1px solid #86EFAC; }
     .err { background: #FEE2E2; color: #991B1B; border: 1px solid #FCA5A5; }
-    .info { background: #E0F2FE; color: #075985; border: 1px solid #7DD3FC; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>📷 SPX | Scanner de Nota Fiscal</h1>
-      <p>Escaneia a nota pela câmera, lê as informações e envia para o Apps Script tratar</p>
-    </div>
 
+  <div class="topbar">
+    <span class="badge">SPX</span>
+    <h1>SCANNER MOBILE DE NOTA FISCAL</h1>
+  </div>
+
+  <div class="wrap">
     <div class="card">
-      <h2>1. Escanear Nota Física (Câmera)</h2>
-      <div class="row">
-        <button class="btn btn-dark" type="button" id="btnCamera" onclick="iniciarCamera()">🎥 Ligar Câmera</button>
-        <button class="btn btn-spx" type="button" id="btnEscanear" onclick="escanearQuadro()" disabled>📸 Escanear Nota</button>
+      <div class="camera-box">
+        <video id="videoCam" autoplay playsinline muted></video>
+        <canvas id="canvasDoc"></canvas>
+        <div class="guia-doc" id="guiaDoc"></div>
       </div>
 
-      <label style="margin-top:10px">Filtro de escaneamento</label>
-      <select id="modoFiltro" onchange="aplicarFiltroScanner()">
-        <option value="doc_nitido">Documento Nítido (Alto Contraste / PB)</option>
-        <option value="cinza_limpo">Tons de Cinza Limpo</option>
-        <option value="original">Original</option>
+      <select id="filtroModo" onchange="aplicarTratamentoImagem()">
+        <option value="doc_nitido">Modo Documento Nítido (Alto Contraste)</option>
+        <option value="cinza">Modo Cinza Limpo</option>
+        <option value="colorido">Modo Colorido Otimizado</option>
       </select>
 
-      <video id="videoPreview" autoplay playsinline muted></video>
-      <canvas id="scanCanvas"></canvas>
-      <button class="btn btn-dark" type="button" id="btnOcr" onclick="executarOcr()" disabled>🔍 Ler Informações e Itens (OCR)</button>
-    </div>
-
-    <div class="card">
-      <h2>2. Informações Lidas e Itens</h2>
-      <div class="row">
-        <div>
-          <label>Nº da Nota Fiscal *</label>
-          <input type="text" id="numeroNota" placeholder="Ex.: 819105" />
-        </div>
-        <div>
-          <label>Fornecedor / Emitente *</label>
-          <input type="text" id="fornecedor" placeholder="Ex.: 1000 MARCAS SAFETY" />
-        </div>
+      <div class="row-2">
+        <button class="btn btn-dark" type="button" id="btnRefazer" onclick="ligarCamera()">🔄 Câmera</button>
+        <button class="btn btn-spx" type="button" id="btnCapturar" onclick="capturarDocumento()">📸 DIGITALIZAR NOTA</button>
       </div>
 
-      <div class="row">
-        <div>
-          <label>Categoria dos Itens *</label>
-          <select id="categoria">
-            <option value="EPI / Segurança">EPI / Segurança</option>
-            <option value="Insumos Operacionais">Insumos Operacionais</option>
-            <option value="Manutenção / Infraestrutura">Manutenção / Infraestrutura</option>
-            <option value="TI / Impressoras / Coletores">TI / Impressoras / Coletores</option>
-            <option value="Limpeza / Copa">Limpeza / Copa</option>
-            <option value="Outros">Outros</option>
-          </select>
-        </div>
-        <div>
-          <label>Nome de Quem Recebeu *</label>
-          <input type="text" id="recebedor" placeholder="Nome de quem recebeu" />
-        </div>
-      </div>
+      <!-- Fallback nativo para dispositivos móveis onde getUserMedia seja bloqueado -->
+      <input type="file" id="inputFallbackCam" accept="image/*" capture="environment" style="display:none" />
+      <button class="btn btn-outline" type="button" onclick="document.getElementById('inputFallbackCam').click()">
+        📱 Usar Câmera Nativa do Celular
+      </button>
 
-      <div class="row">
-        <div>
-          <label>Chave NF-e (44 dígitos - opcional)</label>
-          <input type="text" id="chaveNf" maxlength="44" placeholder="Opcional" />
-        </div>
-        <div>
-          <label>E-mail Destinatário</label>
-          <input type="email" id="emailDestino" value="jose.espiritosanto@shopee.com" />
-        </div>
-      </div>
+      <button class="btn btn-spx" type="button" id="btnProcessarEnviar" onclick="processarOcrERetornar()" disabled>
+        ⚡ LER OCR E ENVIAR PARA CONFERÊNCIA
+      </button>
 
-      <label>Adicionar / ajustar item</label>
-      <div class="row">
-        <input type="text" id="itemCod" placeholder="Código (opcional)" />
-        <input type="text" id="itemNome" placeholder="Produto / Descrição" />
-      </div>
-      <div class="row">
-        <input type="number" id="itemQtd" placeholder="Qtd" value="1" step="0.01" />
-        <input type="number" id="itemValor" placeholder="Vl. Unit. (R$)" value="0" step="0.01" />
-      </div>
-      <button class="btn btn-gray" type="button" onclick="adicionarItemManual()">+ Adicionar Item</button>
-
-      <table>
-        <thead>
-          <tr><th>Cód</th><th>Produto</th><th>Qtd</th><th>Vl. Unit.</th><th>Total</th><th>Ação</th></tr>
-        </thead>
-        <tbody id="listaItensBody"></tbody>
-      </table>
-
-      <button class="btn btn-spx" type="button" id="btnEnviar" onclick="enviarDadosParaAppsScript()">🚀 Enviar Dados para o Apps Script</button>
       <div id="statusBox" class="status"></div>
     </div>
   </div>
 
   <script>
-    // Cole aqui a URL /exec do seu Web App do Google Apps Script
-    const APPS_SCRIPT_EXEC_URL = "COLE_AQUI_SUA_URL_EXEC";
+    let streamAtual = null;
+    let imagemCapturada = null;
 
-    let streamAtivo = null;
-    let quadroCapturado = null;
-    let itensNota = [];
+    window.addEventListener("load", ligarCamera);
 
-    window.addEventListener("load", function() {
-      iniciarCamera();
-    });
-
-    async function iniciarCamera() {
+    async function ligarCamera() {
       try {
-        if (streamAtivo) {
-          streamAtivo.getTracks().forEach(t => t.stop());
-        }
-        const video = document.getElementById("videoPreview");
+        if (streamAtual) streamAtual.getTracks().forEach(t => t.stop());
+        const video = document.getElementById("videoCam");
+        const canvas = document.getElementById("canvasDoc");
         video.style.display = "block";
-        document.getElementById("scanCanvas").style.display = "none";
+        canvas.style.display = "none";
+        document.getElementById("guiaDoc").style.display = "block";
 
-        streamAtivo = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
+        streamAtual = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1600 }, height: { ideal: 1200 } },
           audio: false
         });
-        video.srcObject = streamAtivo;
-        document.getElementById("btnEscanear").disabled = false;
-        setStatus("info", "Câmera ligada. Posicione a nota fiscal e toque em 'Escanear Nota'.");
-      } catch (err) {
-        setStatus(
-          "err",
-          "Não foi possível abrir a câmera diretamente (" + err.message + ").\n" +
-          "Verifique se o navegador tem permissão de câmera para este site."
-        );
+        video.srcObject = streamAtual;
+        setStatus("info", "Enquadre a nota fiscal na área pontilhada e toque em DIGITALIZAR NOTA.");
+      } catch (e) {
+        setStatus("info", "Toque em 'Usar Câmera Nativa do Celular' abaixo para fotografar a nota.");
       }
     }
 
-    function escanearQuadro() {
-      const video = document.getElementById("videoPreview");
-      const canvas = document.getElementById("scanCanvas");
-      if (!video.videoWidth || !video.videoHeight) {
-        return setStatus("err", "Aguarde a imagem da câmera aparecer antes de escanear.");
+    document.getElementById("inputFallbackCam").addEventListener("change", function(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        carregarImagemNoCanvas(ev.target.result);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    function capturarDocumento() {
+      const video = document.getElementById("videoCam");
+      if (!video.videoWidth) {
+        document.getElementById("inputFallbackCam").click();
+        return;
       }
+      const temp = document.createElement("canvas");
+      temp.width = video.videoWidth;
+      temp.height = video.videoHeight;
+      temp.getContext("2d").drawImage(video, 0, 0);
+      carregarImagemNoCanvas(temp.toDataURL("image/jpeg", 0.92));
+      if (streamAtual) streamAtual.getTracks().forEach(t => t.stop());
+    }
 
-      const maxW = 900;
-      const escala = video.videoWidth > maxW ? maxW / video.videoWidth : 1;
-      canvas.width = Math.round(video.videoWidth * escala);
-      canvas.height = Math.round(video.videoHeight * escala);
-
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = canvas.width;
-      tempCanvas.height = canvas.height;
-      tempCanvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
-
+    function carregarImagemNoCanvas(dataUrl) {
       const img = new Image();
       img.onload = function() {
-        quadroCapturado = img;
-        video.style.display = "none";
+        imagemCapturada = img;
+        document.getElementById("videoCam").style.display = "none";
+        document.getElementById("guiaDoc").style.display = "none";
+        const canvas = document.getElementById("canvasDoc");
         canvas.style.display = "block";
-        document.getElementById("btnOcr").disabled = false;
-        aplicarFiltroScanner();
-        setStatus("ok", "Nota escaneada! Agora clique em 'Ler Informações e Itens (OCR)' ou preencha os campos.");
+
+        const maxLado = 1280;
+        const escala = Math.max(img.width, img.height) > maxLado ? maxLado / Math.max(img.width, img.height) : 1;
+        canvas.width = Math.round(img.width * escala);
+        canvas.height = Math.round(img.height * escala);
+
+        aplicarTratamentoImagem();
+        document.getElementById("btnProcessarEnviar").disabled = false;
+        setStatus("ok", "Documento digitalizado! Toque em 'LER OCR E ENVIAR PARA CONFERÊNCIA'.");
       };
-      img.src = tempCanvas.toDataURL("image/jpeg", 0.85);
+      img.src = dataUrl;
     }
 
-    function aplicarFiltroScanner() {
-      if (!quadroCapturado) return;
-      const canvas = document.getElementById("scanCanvas");
+    function aplicarTratamentoImagem() {
+      if (!imagemCapturada) return;
+      const canvas = document.getElementById("canvasDoc");
       const ctx = canvas.getContext("2d");
-      const modo = document.getElementById("modoFiltro").value;
+      const modo = document.getElementById("filtroModo").value;
 
-      ctx.drawImage(quadroCapturado, 0, 0, canvas.width, canvas.height);
-      if (modo === "original") return;
+      ctx.drawImage(imagemCapturada, 0, 0, canvas.width, canvas.height);
+      if (modo === "colorido") return;
 
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imgData.data;
-      for (let i = 0; i < data.length; i += 4) {
-        let gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      const d = imgData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        let g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
         if (modo === "doc_nitido") {
-          gray = gray > 168 ? 255 : Math.max(0, (gray - 65) * 1.65);
-        } else if (modo === "cinza_limpo") {
-          gray = Math.min(255, Math.max(0, (gray - 128) * 1.25 + 138));
+          g = g > 172 ? 255 : Math.max(0, (g - 60) * 1.6);
+        } else {
+          g = Math.min(255, Math.max(0, (g - 128) * 1.25 + 138));
         }
-        data[i] = data[i + 1] = data[i + 2] = gray;
+        d[i] = d[i + 1] = d[i + 2] = g;
       }
       ctx.putImageData(imgData, 0, 0);
     }
 
-    async function executarOcr() {
-      if (!quadroCapturado) return setStatus("err", "Escaneie a nota primeiro.");
-      const btn = document.getElementById("btnOcr");
-      btn.disabled = true;
-      btn.textContent = "⏳ Lendo informações...";
-      setStatus("info", "Extraindo texto e itens da nota escaneada...");
+    // Parser inteligente: separa cabeçalho e itens reais (ignora impostos, frete, descontos e totais)
+    function analisarTextoNotaFiscal(textoBruto) {
+      const texto = String(textoBruto || "");
+      const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const somenteDigitos = texto.replace(/\D/g, "");
 
-      try {
-        const canvas = document.getElementById("scanCanvas");
-        const { data } = await Tesseract.recognize(canvas, "por");
-        const texto = data.text || "";
+      // 1. Chave NF-e (44 dígitos)
+      const matchChave = somenteDigitos.match(/\d{44}/);
+      const chave = matchChave ? matchChave[0] : "";
 
-        const matchChave = texto.replace(/\D/g, "").match(/\d{44}/);
-        if (matchChave && !document.getElementById("chaveNf").value) {
-          document.getElementById("chaveNf").value = matchChave[0];
+      // 2. Número da NF (pela chave nos dígitos 26..34 ou por padrão textual)
+      let numeroNota = "";
+      if (chave) {
+        numeroNota = String(parseInt(chave.substring(25, 34), 10) || "");
+      }
+      if (!numeroNota) {
+        const mNum = texto.match(/(?:N[º°o.\s]*|NF-?E[:\s]*|NOTA[:\s]*)0*(\d{3,9})/i);
+        if (mNum) numeroNota = mNum[1];
+      }
+
+      // 3. Fornecedor / Emitente (primeiras linhas em caixa alta antes de DANFE/CNPJ)
+      let fornecedor = "";
+      for (let i = 0; i < Math.min(8, linhas.length); i++) {
+        const l = linhas[i];
+        if (/DANFE|DOCUMENTO AUXILIAR|CHAVE DE ACESSO|CONSULTA DE AUTENTICIDADE|RECEBEMOS/i.test(l)) continue;
+        if (l.length >= 5 && /[A-Z]{3,}/.test(l) && !/^\d+$/.test(l)) {
+          fornecedor = l.replace(/[^A-Z0-9\s.&-]/gi, "").trim().slice(0, 60);
+          break;
         }
+      }
 
-        const matchNum = texto.match(/(?:N[º°o.\s]*|NOTA[:\s]*)(\d{3,9})/i);
-        if (matchNum && !document.getElementById("numeroNota").value) {
-          document.getElementById("numeroNota").value = matchNum[1];
-        }
+      // 4. Valor Total da Nota
+      let valorTotal = 0;
+      const mTotalNota = texto.match(/VALOR\s+TOTAL\s+DA\s+NOTA[^\d]*(\d{1,3}(?:\.\d{3})*,\d{2})/i)
+        || texto.match(/TOTAL\s+(?:GERAL|A\s+PAGAR|NF)[^\d]*(\d{1,3}(?:\.\d{3})*,\d{2})/i);
+      if (mTotalNota) {
+        valorTotal = parseFloat(mTotalNota[1].replace(/\./g, "").replace(",", ".")) || 0;
+      }
 
-        const linhas = texto.split("\n").map(l => l.trim()).filter(Boolean);
-        let adicionados = 0;
-        for (const linha of linhas) {
-          const matchValor = linha.match(/(\d+[.,]\d{2})\s*$/);
-          if (matchValor && linha.length > 8 && adicionados < 15) {
-            const vTot = parseFloat(matchValor[1].replace(",", "."));
-            const desc = linha.replace(/(\d+[.,]\d{2})\s*$/, "").trim();
-            if (vTot > 0 && desc.length >= 4) {
-              itensNota.push({
-                codigo: "-",
-                produto: desc.slice(0, 80),
-                descricao: desc.slice(0, 80),
-                unidade: "UN",
-                quantidade: 1,
-                valorUnitario: vTot,
-                valorTotal: vTot
-              });
-              adicionados++;
-            }
+      // 5. Itens reais (filtra linhas de impostos, totais, frete e descontos)
+      const termosExcluidos = /(?:VALOR\s+TOTAL|SUBTOTAL|TOTAL\s+DOS\s+PRODUTOS|FRETE|SEGURO|DESCONTO|OUTRAS\s+DESPESAS|BASE\s+DE\s+C[AÁ]LCULO|ICMS|IPI|PIS|COFINS|ISSQN|TRIBUTOS|TROCO|DINHEIRO|CART[AÃ]O|PIX|DUPLICATA|FATURA|PARCELA)/i;
+      const itens = [];
+
+      for (const linha of linhas) {
+        if (termosExcluidos.test(linha)) continue;
+        // Padrão: Descrição + Qtd + VlUnit + VlTotal no final da linha
+        const mCompleto = linha.match(/^(.{4,65}?)\s+(\d+(?:[.,]\d{1,3})?)\s+(?:UN|PC|CX|KG|LT|PAR|KT)?\s*(\d{1,3}(?:\.\d{3})*,\d{2})\s+(\d{1,3}(?:\.\d{3})*,\d{2})$/i);
+        if (mCompleto) {
+          const nome = mCompleto[1].replace(/^[\d.\-\s]+/, "").trim();
+          const qtd = parseFloat(mCompleto[2].replace(",", ".")) || 1;
+          const vUnit = parseFloat(mCompleto[3].replace(/\./g, "").replace(",", ".")) || 0;
+          const vTot = parseFloat(mCompleto[4].replace(/\./g, "").replace(",", ".")) || (qtd * vUnit);
+          if (nome.length >= 3 && vTot > 0 && vTot !== valorTotal) {
+            itens.push({ produto: nome, descricao: nome, quantidade: qtd, valorUnitario: vUnit, valorTotal: vTot });
+            continue;
           }
         }
-        renderizarItens();
-        setStatus("ok", "Informações lidas (" + adicionados + " item(ns) sugerido(s)). Confira e clique em 'Enviar Dados para o Apps Script'.");
-      } catch (e) {
-        setStatus("err", "Erro ao ler nota: " + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "🔍 Ler Informações e Itens (OCR)";
-      }
-    }
 
-    function adicionarItemManual() {
-      const cod = document.getElementById("itemCod").value.trim() || "-";
-      const nome = document.getElementById("itemNome").value.trim();
-      const qtd = parseFloat(document.getElementById("itemQtd").value) || 1;
-      const vUnit = parseFloat(document.getElementById("itemValor").value) || 0;
-      if (!nome) return setStatus("err", "Informe o nome/descrição do item.");
-
-      itensNota.push({
-        codigo: cod,
-        produto: nome,
-        descricao: nome,
-        unidade: "UN",
-        quantidade: qtd,
-        valorUnitario: vUnit,
-        valorTotal: qtd * vUnit
-      });
-
-      document.getElementById("itemCod").value = "";
-      document.getElementById("itemNome").value = "";
-      document.getElementById("itemQtd").value = "1";
-      document.getElementById("itemValor").value = "0";
-      renderizarItens();
-    }
-
-    function removerItem(idx) {
-      itensNota.splice(idx, 1);
-      renderizarItens();
-    }
-
-    function renderizarItens() {
-      document.getElementById("listaItensBody").innerHTML = itensNota.map((it, idx) =>
-        "<tr><td>" + esc(it.codigo) + "</td><td>" + esc(it.produto) + "</td><td>" + it.quantidade +
-        "</td><td>R$ " + Number(it.valorUnitario).toFixed(2) + "</td><td>R$ " + Number(it.valorTotal).toFixed(2) +
-        "</td><td><button type='button' onclick='removerItem(" + idx + ")'>X</button></td></tr>"
-      ).join("");
-    }
-
-    async function enviarDadosParaAppsScript() {
-      if (!APPS_SCRIPT_EXEC_URL || !APPS_SCRIPT_EXEC_URL.includes("/exec")) {
-        return setStatus("err", "Configure a URL /exec na constante APPS_SCRIPT_EXEC_URL do index.html.");
-      }
-      if (!quadroCapturado) {
-        return setStatus("err", "Escaneie a nota pela câmera antes de enviar.");
+        // Padrão alternativo: Descrição + Valor Total no fim da linha
+        const mSimples = linha.match(/^(.{5,65}?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})$/);
+        if (mSimples) {
+          const nome = mSimples[1].replace(/^[\d.\-\s]+/, "").trim();
+          const vTot = parseFloat(mSimples[2].replace(/\./g, "").replace(",", ".")) || 0;
+          if (nome.length >= 4 && !/^\d+$/.test(nome) && vTot > 0 && vTot !== valorTotal) {
+            itens.push({ produto: nome, descricao: nome, quantidade: 1, valorUnitario: vTot, valorTotal: vTot });
+          }
+        }
       }
 
-      const btn = document.getElementById("btnEnviar");
+      if (!valorTotal && itens.length > 0) {
+        valorTotal = itens.reduce((acc, it) => acc + it.valorTotal, 0);
+      }
+
+      return {
+        numeroNota: numeroNota,
+        fornecedor: fornecedor,
+        chave: chave,
+        valorTotal: Number(valorTotal.toFixed(2)),
+        itens: itens.slice(0, 30)
+      };
+    }
+
+    async function processarOcrERetornar() {
+      if (!imagemCapturada) return setStatus("err", "Digitalize a nota primeiro.");
+      const btn = document.getElementById("btnProcessarEnviar");
       btn.disabled = true;
-      btn.textContent = "⏳ Enviando dados...";
-      setStatus("info", "Enviando informações lidas para o Google Apps Script tratar...");
+      btn.textContent = "⏳ LENDO OCR E MONTANDO PDF...";
+      setStatus("info", "Extraindo informações da nota fiscal...");
 
       try {
-        const canvas = document.getElementById("scanCanvas");
-        const imagemBase64 = canvas.toDataURL("image/jpeg", 0.65).split(",")[1];
-        const numeroNota = document.getElementById("numeroNota").value.trim();
-        const fornecedor = document.getElementById("fornecedor").value.trim();
-        const categoria = document.getElementById("categoria").value;
-        const recebedor = document.getElementById("recebedor").value.trim() || "Equipe SPX";
-        const chave = document.getElementById("chaveNf").value.trim();
-        const email = document.getElementById("emailDestino").value.trim();
-        const valorTotal = itensNota.reduce((acc, it) => acc + (Number(it.valorTotal) || 0), 0);
+        const canvas = document.getElementById("canvasDoc");
+        const { data } = await Tesseract.recognize(canvas, "por");
+        const estruturado = analisarTextoNotaFiscal(data.text || "");
+        estruturado.confiancaOcr = data.confidence || 0;
 
-        const resp = await fetch(APPS_SCRIPT_EXEC_URL, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            chave,
-            numeroNota,
-            fornecedor,
-            categoria,
-            recebedor,
-            email,
-            valorTotal,
-            itens: itensNota,
-            imagemBase64,
-            enviarEmail: true
-          }),
-          redirect: "follow"
-        });
+        // Comprime imagem para envio rápido no celular
+        const imagemDataUrl = canvas.toDataURL("image/jpeg", 0.72);
+        estruturado.imagemBase64 = imagemDataUrl.split(",")[1];
 
-        const textoResp = await resp.text();
-        let jsonResp = null;
-        try { jsonResp = JSON.parse(textoResp); } catch (e) {}
+        // Gera PDF da digitalização no lado do scanner também
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+        pdf.addImage(imagemDataUrl, "JPEG", 8, 8, 194, 275);
+        estruturado.pdfBase64 = pdf.output("datauristring").split(",")[1];
 
-        if (jsonResp && jsonResp.sucesso) {
-          setStatus(
-            "ok",
-            "Dados enviados e tratados pelo Apps Script! Linha: " + jsonResp.linha +
-            "\nItens salvos: " + jsonResp.totalItens +
-            "\nE-mail enviado: " + (jsonResp.emailEnviado ? "Sim" : "Não") +
-            "\nArquivo salvo no Drive: " + (jsonResp.pdfUrl || "OK")
-          );
-        } else {
-          setStatus("err", "Falha no Apps Script:\n" + (jsonResp ? jsonResp.mensagem : textoResp.slice(0, 300)));
+        // 1. Tenta devolver diretamente para a janela do Apps Script que abriu o scanner
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({
+            tipo: "SPX_SCANNER_RESULTADO",
+            dados: estruturado
+          }, "*");
+          setStatus("ok", "Dados enviados para a tela de Conferência do Apps Script!");
+          setTimeout(function() { window.close(); }, 700);
+          return;
         }
-      } catch (erro) {
-        setStatus(
-          "err",
-          "Erro de conexão (Failed to fetch).\n" +
-          "Confira no Apps Script: Implantar -> Gerenciar implantações -> Executar como: Eu e Quem pode acessar: Qualquer pessoa com o link.\n" +
-          "Detalhe: " + erro.message
-        );
+
+        // 2. Fallback caso o scanner tenha sido aberto diretamente sem window.opener
+        const jsonCompacto = JSON.stringify({
+          numeroNota: estruturado.numeroNota,
+          fornecedor: estruturado.fornecedor,
+          chave: estruturado.chave,
+          valorTotal: estruturado.valorTotal,
+          itens: estruturado.itens,
+          confiancaOcr: estruturado.confiancaOcr
+        });
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(jsonCompacto);
+        }
+        setStatus("ok", "Leitura concluída e copiada! Volte ao Apps Script e cole no campo de retorno alternativo.");
+      } catch (e) {
+        setStatus("err", "Falha ao ler nota: " + e.message);
       } finally {
         btn.disabled = false;
-        btn.textContent = "🚀 Enviar Dados para o Apps Script";
+        btn.textContent = "⚡ LER OCR E ENVIAR PARA CONFERÊNCIA";
       }
     }
 
     function setStatus(tipo, msg) {
-      const box = document.getElementById("statusBox");
-      box.className = "status " + tipo;
-      box.textContent = msg;
-      box.style.display = "block";
-    }
-
-    function esc(s) {
-      return String(s || "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+      const el = document.getElementById("statusBox");
+      el.className = "status " + tipo;
+      el.textContent = msg;
+      el.style.display = "block";
     }
   </script>
 </body>
